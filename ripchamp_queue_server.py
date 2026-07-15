@@ -2,13 +2,15 @@
 """
 ripchamp_queue_server.py
 
-Persistent, bookmarkable queue for clips detected by the folder watcher.
-Instead of popping up a browser tab (stealing focus from your game) the
-instant a clip finishes recording, the watcher just POSTs the file path
-to this server's queue. Bookmark http://127.0.0.1:<PORT>/ and process
-clips whenever you're ready: pick one from the list, scrub/trim/set
-options (same picker as ripchamp_trim_ui.py), hit Confirm, and
-ripchamp.py runs in the background while you move to the next one.
+Persistent, bookmarkable queue for clips detected by the folder watcher
+(or added manually via the page's "Browse for a file..." button -- this
+is the only way clips get processed now, no separate drag-and-drop/prompt
+flow). Instead of popping up a browser tab (stealing focus from your
+game) the instant a clip finishes recording, the watcher just POSTs the
+file path to this server's queue. Bookmark http://127.0.0.1:<PORT>/ and
+process clips whenever you're ready: pick one from the list, scrub/trim/
+set options, hit Confirm, and ripchamp.py runs in the background while
+you move to the next one.
 
 Runs on a fixed port (default 8787) so the bookmark stays valid across
 restarts. Starting a second instance while one is already running on

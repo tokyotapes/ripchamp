@@ -1,30 +1,22 @@
 <#
 ripchamp_tools.ps1
 
-All-in-one control script for the ripchamp pipeline. Replaces what used
-to be several separate .bat files: the interactive prompt, the folder
-watcher, scheduled-task install/uninstall/status for running the watcher
-hidden at logon, and one-time setup for Discord and YouTube.
+All-in-one control script for the ripchamp pipeline: the folder watcher,
+scheduled-task install/uninstall/status for running it hidden at logon,
+and one-time setup for Discord and YouTube. Everyday clip processing
+itself happens entirely through the browser (the queue page at
+http://127.0.0.1:8787/, including its own "Browse for a file..." button
+for anything not auto-detected by the watcher) -- this script's job is
+just keeping that watcher/queue server running, not processing clips
+directly.
 
 Usage:
-  powershell -File ripchamp_tools.ps1 -Mode Prompt -Path "video.mp4"
-      Interactive: opens a single browser page (ripchamp_trim_ui.py) with
-      scrub sliders + loop preview, video/audio choice, title, upload
-      destination, and Discord channel picker, then runs ripchamp.py with
-      the choices made there. Falls back to old-style console Read-Host
-      prompts only if the picker can't launch. (This is what
-      ripchamp_launcher.vbs calls for you -- you normally won't run this
-      mode directly.)
-
   powershell -File ripchamp_tools.ps1 -Mode Watch [-WatchPath "C:\..."]
-      Watches WatchPath (and subfolders) for new .mp4 files. Once a file
-      finishes writing, it's added to the persistent queue server
-      (ripchamp_queue_server.py, http://127.0.0.1:8787/ by default) instead
-      of popping up a prompt immediately -- bookmark that page and process
-      clips whenever you're ready, so a clip finishing mid-game doesn't
-      yank focus away from it. Falls back to the old immediate popup
-      (ripchamp_launcher.vbs) only if the queue server can't be reached.
-      Leave running -- Ctrl+C to stop.
+      Watches WatchPath (and subfolders) for new .mp4 files and adds each
+      one to the persistent queue server (ripchamp_queue_server.py,
+      http://127.0.0.1:8787/ by default) -- bookmark that page and
+      process clips whenever you're ready, so a clip finishing mid-game
+      doesn't yank focus away from it. Leave running -- Ctrl+C to stop.
 
   powershell -File ripchamp_tools.ps1 -Mode InstallTask [-WatchPath "C:\..."]
       Registers a scheduled task to run -Mode Watch hidden at every logon.
@@ -46,10 +38,9 @@ Usage:
 
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("Prompt", "Watch", "InstallTask", "UninstallTask", "Status", "AddDiscordChannel", "SetupYoutube")]
+    [ValidateSet("Watch", "InstallTask", "UninstallTask", "Status", "AddDiscordChannel", "SetupYoutube")]
     [string]$Mode,
 
-    [string]$Path,
     [string]$WatchPath = "C:\Users\evan\Videos\NVIDIA",
     [string]$ScriptDir = $PSScriptRoot
 )
@@ -92,157 +83,12 @@ Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class RIPChampWin32 {
-    [DllImport("user32.dll")]
-    public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("kernel32.dll")]
     public static extern IntPtr GetConsoleWindow();
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
 "@
-
-function Invoke-PromptFallback {
-    # Used only if ripchamp_trim_ui.py can't run at all (e.g. python missing).
-    param([string]$FilePath)
-
-    $start = Read-Host "Trim start time, blank for none (e.g. 30s or 1:30)"
-    $end = Read-Host "Trim end time, blank for none (e.g. 1:30)"
-
-    Write-Host "1. Video"
-    Write-Host "2. Audio only (extract mp3, saved locally)"
-    $typeChoice = Read-Host "Choice, blank for Video"
-
-    $pyArgs = @($FilePath)
-    if ($start) { $pyArgs += @("--start", $start) }
-    if ($end) { $pyArgs += @("--end", $end) }
-
-    if ($typeChoice -eq "2") {
-        Write-Host "Audio only -- extracting mp3, saving locally."
-        $pyArgs += @("--audio-only", "--no-youtube", "--no-discord")
-        python (Join-Path $ScriptDir "ripchamp.py") @pyArgs
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host ""
-            Write-Host "ripchamp.py reported an error -- see above." -ForegroundColor Yellow
-            Read-Host "Press Enter to close"
-        }
-        return
-    }
-
-    $title = Read-Host "Video title, blank for default"
-    if ($title) { $pyArgs += @("--youtube-title", $title) }
-
-    Write-Host "1. Upload"
-    Write-Host "2. Local only (just crop, don't upload anywhere)"
-    $destChoice = Read-Host "Choice, blank for Upload"
-
-    if ($destChoice -eq "2") {
-        Write-Host "Local only -- skipping upload."
-        $pyArgs += @("--no-youtube", "--no-discord")
-    } else {
-        $pyArgs += @("--delete-after-upload")
-
-        # Numbered Discord channel picker, if more than one is configured
-        $webhooksFile = Join-Path $ScriptDir "discord_webhooks.txt"
-        if (Test-Path $webhooksFile) {
-            $names = Get-Content $webhooksFile | Where-Object { $_ -match "=" } | ForEach-Object { ($_ -split "=", 2)[0] }
-            if ($names.Count -gt 1) {
-                Write-Host "Discord channels available:"
-                for ($i = 0; $i -lt $names.Count; $i++) { Write-Host "  $($i + 1). $($names[$i])" }
-                $choice = Read-Host "Post to which channel number, blank to skip"
-                if ($choice) {
-                    $idx = [int]$choice - 1
-                    if ($idx -ge 0 -and $idx -lt $names.Count) {
-                        $pyArgs += @("--discord-channel", $names[$idx])
-                    } else {
-                        Write-Host "Not a valid choice -- skipping Discord for this file."
-                    }
-                }
-            }
-        }
-    }
-
-    python (Join-Path $ScriptDir "ripchamp.py") @pyArgs
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host ""
-        Write-Host "ripchamp.py reported an error -- see above." -ForegroundColor Yellow
-        Read-Host "Press Enter to close"
-    }
-}
-
-function Invoke-Prompt {
-    param([string]$FilePath)
-
-    if (-not $FilePath) {
-        Write-Host "Error: no file path given." -ForegroundColor Red
-        return
-    }
-
-    Write-Host "============================================"
-    Write-Host "Processing: $(Split-Path $FilePath -Leaf)"
-    Write-Host "============================================"
-    Write-Host "Opening picker in your browser..."
-
-    $pickerJson = $null
-    try {
-        $pickerOutput = & python (Join-Path $ScriptDir "ripchamp_trim_ui.py") $FilePath 2>$null
-        $resultLine = $pickerOutput | Where-Object { $_ -like "RESULT:*" } | Select-Object -Last 1
-        if ($resultLine) {
-            $pickerJson = $resultLine.Substring(7) | ConvertFrom-Json
-        }
-    } catch {
-        $pickerJson = $null
-    }
-
-    if (-not $pickerJson) {
-        Write-Host "Picker unavailable -- falling back to manual entry." -ForegroundColor Yellow
-        Invoke-PromptFallback -FilePath $FilePath
-        return
-    }
-
-    if ($pickerJson.canceled) {
-        Write-Host "Canceled -- aborting."
-        return
-    }
-
-    $pyArgs = @($FilePath)
-    if ($pickerJson.PSObject.Properties.Name -contains "start") { $pyArgs += @("--start", "$($pickerJson.start)") }
-    if ($pickerJson.PSObject.Properties.Name -contains "end") { $pyArgs += @("--end", "$($pickerJson.end)") }
-
-    if ($pickerJson.type -eq "audio") {
-        Write-Host "Audio only -- extracting mp3, saving locally."
-        $pyArgs += @("--audio-only", "--no-youtube", "--no-discord")
-        python (Join-Path $ScriptDir "ripchamp.py") @pyArgs
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host ""
-            Write-Host "ripchamp.py reported an error -- see above." -ForegroundColor Yellow
-            Read-Host "Press Enter to close"
-        }
-        return
-    }
-
-    if ($pickerJson.PSObject.Properties.Name -contains "title" -and $pickerJson.title) {
-        $pyArgs += @("--youtube-title", $pickerJson.title)
-    }
-
-    if ($pickerJson.destination -eq "local") {
-        Write-Host "Local only -- skipping upload."
-        $pyArgs += @("--no-youtube", "--no-discord")
-    } else {
-        $pyArgs += @("--delete-after-upload")
-        if ($pickerJson.PSObject.Properties.Name -contains "discordChannel" -and $pickerJson.discordChannel) {
-            $pyArgs += @("--discord-channel", $pickerJson.discordChannel)
-        }
-    }
-
-    python (Join-Path $ScriptDir "ripchamp.py") @pyArgs
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host ""
-        Write-Host "ripchamp.py reported an error -- see above." -ForegroundColor Yellow
-        Read-Host "Press Enter to close"
-    }
-}
 
 function Invoke-Watch {
     # Hide this console window directly -- launch-time window-style flags
@@ -261,7 +107,7 @@ function Invoke-Watch {
     if (Ensure-QueueServer) {
         Write-Host "Queue server ready at http://127.0.0.1:$QueuePort/ -- bookmark it and process clips whenever you're ready."
     } else {
-        Write-Host "Queue server unavailable -- clips will fall back to an immediate popup prompt instead." -ForegroundColor Yellow
+        Write-Host "Queue server unavailable -- new clips won't be queued until it's running. Try restart_ripchamp.bat." -ForegroundColor Yellow
     }
 
     $watcher = New-Object System.IO.FileSystemWatcher
@@ -273,7 +119,6 @@ function Invoke-Watch {
 
     $action = {
         $filePath = $Event.SourceEventArgs.FullPath
-        $scriptDir = $Event.MessageData.ScriptDir
         $queuePort = $Event.MessageData.QueuePort
 
         if ($filePath -like "*_1080p.mp4" -or $filePath -like "*_discord.mp4") { return }
@@ -310,16 +155,15 @@ function Invoke-Watch {
         if ($queued) {
             Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Added to queue: $filePath"
         } else {
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Queue server unreachable -- falling back to immediate prompt for: $filePath" -ForegroundColor Yellow
-            $activeWindow = [RIPChampWin32]::GetForegroundWindow()
-            Start-Process -FilePath "wscript.exe" -ArgumentList "`"$scriptDir\ripchamp_launcher.vbs`" `"$filePath`""
-            Start-Sleep -Milliseconds 800
-            [RIPChampWin32]::SetForegroundWindow($activeWindow) | Out-Null
+            # No fallback path anymore -- everything goes through the queue page.
+            # The file is still on disk; once the server's back up, add it with
+            # the queue page's "Browse for a file..." button.
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Queue server unreachable -- couldn't add: $filePath" -ForegroundColor Yellow
         }
     }
 
     Register-ObjectEvent -InputObject $watcher -EventName Created -Action $action `
-        -MessageData @{ ScriptDir = $ScriptDir; QueuePort = $QueuePort } | Out-Null
+        -MessageData @{ QueuePort = $QueuePort } | Out-Null
 
     Write-Host "Watching '$WatchPath' and subfolders for new .mp4 files. Press Ctrl+C to stop."
     while ($true) { Start-Sleep -Seconds 1 }
@@ -393,7 +237,6 @@ function Install-YoutubeAuth {
 }
 
 switch ($Mode) {
-    "Prompt"            { Invoke-Prompt -FilePath $Path }
     "Watch"             { Invoke-Watch }
     "InstallTask"       { Install-WatcherTask }
     "UninstallTask"     { Uninstall-WatcherTask }

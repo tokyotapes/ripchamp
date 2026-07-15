@@ -2,12 +2,8 @@
 """
 ripchamp_picker.py
 
-Shared trim/options picker helpers, used by both:
-  - ripchamp_trim_ui.py    (single-shot picker for one file, opened directly
-                             by ripchamp_launcher.vbs for drag-and-drop /
-                             right-click use)
-  - ripchamp_queue_server.py (persistent bookmarkable queue -- same picker
-                             page, one per queued item)
+Shared trim/options picker helpers, used by ripchamp_queue_server.py to
+build and serve the picker page for each queued item.
 
 The actual picker page markup/CSS/JS lives in static/picker.html,
 static/picker.css, and static/picker.js as plain static files (served
