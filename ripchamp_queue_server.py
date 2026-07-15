@@ -15,16 +15,23 @@ restarts. Starting a second instance while one is already running on
 that port is a no-op (it just exits) -- safe to call unconditionally
 from Invoke-Watch each time the watcher starts.
 
-ripchamp_picker.py and ripchamp_queue_page.py (the picker UI and queue
-list page markup/CSS/JS) are hot-reloaded automatically whenever their
-file changes on disk -- edit and refresh the browser, no restart needed.
-Changes to this file's own routing/state logic still require a restart.
+The picker/queue page markup, CSS, and JS live as plain static files
+under static/ (picker.html/css/js, queue.html/css/js) -- edit them
+directly and refresh the browser, no restart needed, since they're
+served fresh from disk on every request. ripchamp_picker.py's Python
+logic is hot-reloaded automatically whenever the file changes on disk
+(see _reload_if_changed()). Changes to this file's own routing/state
+logic still require a restart.
 
 Usage:
     python ripchamp_queue_server.py [--port 8787]
 
 Endpoints:
     GET  /                        queue page (bookmark this)
+    GET  /static/queue.css        queue page stylesheet
+    GET  /static/queue.js         queue page script
+    GET  /static/picker.css       picker page stylesheet
+    GET  /static/picker.js        picker page script
     GET  /favicon.ico             browser tab icon
     GET  /logo.png                logo shown next to the page title
     GET  /status.json             pending/active/history as JSON (polled by the page)
@@ -32,6 +39,7 @@ Endpoints:
     GET  /set-clip-directory      pop a native folder-choose dialog, save it as the local (non-upload) output dir
     GET  /add?path=<abs path>     add a file to the queue (called by the watcher, or the Browse button)
     GET  /item/<id>               picker page for one queued item
+    GET  /item/<id>/config.json   per-item config picker.js fetches at load (filename, video URL, etc.)
     GET  /item/<id>/video         range-streamed video for that item
     GET  /item/<id>/open-file     open the source file in its default app
     GET  /item/<id>/open-folder   reveal the source file in Explorer
@@ -54,7 +62,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ripchamp_picker
-import ripchamp_queue_page
 try:
     from ripchamp import load_discord_webhooks
 except ImportError:
@@ -65,6 +72,7 @@ except ImportError:
     psutil = None
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+STATIC_DIR = SCRIPT_DIR / "static"
 DEFAULT_PORT = 8787
 HISTORY_LIMIT = 20
 CONFIG_PATH = SCRIPT_DIR / "ripchamp_config.json"
@@ -100,9 +108,11 @@ def set_clip_directory(path: str):
 
 def _reload_if_changed(module):
     """Hot-reload a module if its source file has changed on disk since we
-    last loaded it, so CSS/HTML/JS edits to ripchamp_picker.py or
-    ripchamp_queue_page.py take effect on next page load without needing
-    to kill and restart this long-running server process."""
+    last loaded it, so Python-logic edits to ripchamp_picker.py take
+    effect on next request without needing to kill and restart this
+    long-running server process. (HTML/CSS/JS under static/ don't need
+    this -- serve_static_file() already re-reads them from disk on every
+    request.)"""
     path = Path(module.__file__)
     mtime = path.stat().st_mtime
     if _module_mtimes.get(module.__name__) != mtime:
@@ -408,7 +418,23 @@ class QueueHandler(BaseHTTPRequestHandler):
         parts = [p for p in parsed.path.split("/") if p]
 
         if parsed.path in ("/", "/index.html"):
-            self._send_html(_reload_if_changed(ripchamp_queue_page).QUEUE_PAGE)
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.html")
+            return
+
+        if parsed.path == "/static/queue.css":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.css")
+            return
+
+        if parsed.path == "/static/queue.js":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.js")
+            return
+
+        if parsed.path == "/static/picker.css":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "picker.css")
+            return
+
+        if parsed.path == "/static/picker.js":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "picker.js")
             return
 
         if parsed.path == "/favicon.ico":
@@ -481,14 +507,23 @@ class QueueHandler(BaseHTTPRequestHandler):
             if not item:
                 self._not_found()
                 return
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "picker.html")
+            return
+
+        if len(parts) == 3 and parts[0] == "item" and parts[2] == "config.json":
+            item_id = int(parts[1])
+            item = STATE.get(item_id)
+            if not item:
+                self._not_found()
+                return
             channel_names = list(load_discord_webhooks().keys()) if load_discord_webhooks else []
-            html = _reload_if_changed(ripchamp_picker).render_page(
+            config = _reload_if_changed(ripchamp_picker).build_picker_config(
                 item["path"].name, channel_names,
                 video_url=f"/item/{item_id}/video", confirm_url=f"/item/{item_id}/confirm",
                 queue_url="/", open_file_url=f"/item/{item_id}/open-file",
                 open_folder_url=f"/item/{item_id}/open-folder",
             )
-            self._send_html(html)
+            self._send_json(config)
             return
 
         if len(parts) == 3 and parts[0] == "item" and parts[2] == "video":

@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>RIPChamp</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Workbench&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css">
+<link rel="stylesheet" href="/static/picker.css">
+</head>
+<body>
+<div class="page">
+<div class="brand">
+  <div class="brand-left">
+    <img src="/logo2.png" alt="RIPChamp logo" class="logo">
+    <h1 class="brand-name"><span class="rip-part">RIP</span><span class="champ-part">Champ</span>(<span class="clip-part">Clip</span>).<span class="trim-part">Trim</span><span class="cursor-blink">_</span></h1>
+  </div>
+  <div class="file-info">
+    <span class="filename"></span>
+    <div class="file-actions">
+      <button id="openFileBtn" type="button">Open This File</button>
+      <button id="openFolderBtn" type="button">Browse Local Folder</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="video-wrap">
+    <video id="v" preload="metadata"></video>
+    <div class="play-overlay" id="playOverlay">
+      <svg viewBox="0 0 100 100" width="72" height="72">
+        <polygon points="32,20 32,80 82,50" fill="#fff"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="row">
+    <span class="times" id="times">start 0:00.0 &nbsp;·&nbsp; end 0:00.0 &nbsp;·&nbsp; duration 0:00.0</span>
+    <div class="volume-row">
+      <span id="volumeIcon">🔊</span>
+      <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <div class="slider-wrap">
+    <div class="track-bg"></div>
+    <div class="track-sel" id="trackSel"></div>
+    <div class="playhead" id="playhead"></div>
+    <input type="range" id="startSlider" min="0" max="1000" value="0" step="1">
+    <input type="range" id="endSlider" min="0" max="1000" value="1000" step="1">
+  </div>
+  <div class="hint">Click on the video to play, click the video again to pause.  Drag sliders to where you want your new clip to start and stop.</div>
+</div>
+
+<div class="card" id="outputCard">
+  <h2>Output</h2>
+  <div class="row">
+    <label><input type="radio" name="type" value="video" checked> Video</label>
+    <label><input type="radio" name="type" value="audio"> Audio only (extract mp3, saved locally)</label>
+  </div>
+
+  <div id="videoOptions">
+    <div class="row">
+      <label for="titleInput" style="min-width:40px">Title</label>
+      <input type="text" id="titleInput" placeholder="blank for default">
+    </div>
+    <div class="row">
+      <label><input type="radio" name="dest" value="upload" checked> Upload</label>
+      <label><input type="radio" name="dest" value="local"> Local only (just crop, don't upload)</label>
+    </div>
+    <div class="row" id="hostRow" style="display:none">
+      <label><input type="radio" name="videoHost" value="youtube" checked> YouTube</label>
+      <label><input type="radio" name="videoHost" value="streamable"> Streamable (max 250MB)</label>
+    </div>
+    <div class="row" id="channelRow" style="display:none">
+      <label for="channelSelect" style="min-width:40px">Discord</label>
+      <select id="channelSelect"></select>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="danger" id="cancelBtn">Cancel</button>
+  <button class="primary" id="confirmBtn">Confirm</button>
+</div>
+</div>
+
+<script src="/static/picker.js"></script>
+</body>
+</html>

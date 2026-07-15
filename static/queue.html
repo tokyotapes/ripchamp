@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>RIPChamp Clip Queue</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Workbench&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css">
+<link rel="stylesheet" href="/static/queue.css">
+</head>
+<body>
+<div class="page">
+<div class="brand">
+  <div class="brand-left">
+    <div class="title-row">
+      <img src="/logo2.png" alt="RIPChamp logo" class="logo">
+      <h1 class="brand-name"><span class="rip-part">RIP</span><span class="champ-part">Champ</span>(<span class="clip-part">Clip</span>).<span class="queue-part">Queue</span><span class="cursor-blink">_</span></h1>
+    </div>
+    <div class="sub">Bookmark this page. New clips automatically show up here or browse for files manually.</div>
+  </div>
+  <div class="browse-col">
+    <div class="browse-buttons">
+      <button class="button browse-btn" id="browseBtn">Browse for a file...</button>
+      <button class="button browse-btn" id="setClipDirBtn">Set Clip Directory</button>
+    </div>
+    <div class="watcher-status" id="watcherStatus"></div>
+    <div class="watcher-status" id="clipDirStatus"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 id="pendingHeader">Fresh Clips<span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span></h2>
+  <ul id="pendingList"></ul>
+</div>
+
+<div class="card">
+  <h2 id="activeHeader">Let us cook<span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span></h2>
+  <ul id="activeList"></ul>
+</div>
+
+<div class="card">
+  <h2>Clipped and shipped</h2>
+  <ul id="historyList"></ul>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+<script src="/static/queue.js"></script>
+</body>
+</html>

@@ -36,13 +36,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ripchamp_picker import (
-    render_page, serve_video_range, serve_static_file, build_result,
+    build_picker_config, serve_video_range, serve_static_file, build_result,
     open_file_in_default_app, reveal_file_in_folder,
 )
 try:
     from ripchamp import load_discord_webhooks
 except ImportError:
     load_discord_webhooks = None
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 class TrimHandler(BaseHTTPRequestHandler):
@@ -56,13 +58,19 @@ class TrimHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
-            html = render_page(self.video_path.name, self.channel_names)
-            body = html.encode("utf-8")
+            serve_static_file(self, STATIC_DIR / "picker.html")
+        elif self.path == "/config.json":
+            config = build_picker_config(self.video_path.name, self.channel_names)
+            body = json.dumps(config).encode()
             self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/static/picker.css":
+            serve_static_file(self, STATIC_DIR / "picker.css")
+        elif self.path == "/static/picker.js":
+            serve_static_file(self, STATIC_DIR / "picker.js")
         elif self.path == "/video":
             serve_video_range(self, self.video_path)
         elif self.path == "/favicon.ico":
