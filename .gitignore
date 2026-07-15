@@ -1,0 +1,26 @@
+# Secrets -- never commit these
+discord_webhooks.txt
+discord_webhook.txt
+streamable_credentials.txt
+youtube_client_secret.json
+youtube_token.json
+
+# Local machine config (personal paths, not portable)
+ripchamp_config.json
+
+# Generated/runtime files
+__pycache__/
+*.pyc
+*_1080p.mp4
+*_discord.mp4
+
+# Test/sample clips -- large binaries, not project code
+*.mp4
+*.mp3
+
+# Claude Code session-local settings (tool-permission allowlist, not project config)
+.claude/settings.local.json
+
+# OS cruft
+Thumbs.db
+.DS_Store
