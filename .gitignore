@@ -26,6 +26,10 @@ installer/build/
 installer/dist/
 installer/*.spec
 
+# Unused leftover from before Google Fonts were adopted -- nothing
+# references it anymore, keep it local-only, don't track/sync it
+consolas-webfont.woff
+
 # OS cruft
 Thumbs.db
 .DS_Store

@@ -49,12 +49,11 @@ PAYLOAD_FILES = [
     "ripchamp_picker.py",
     "ripchamp_queue_server.py",
     "ripchamp_tools.ps1",
-    "restart_ripchamp.bat",
+    "start_ripchamp.bat",
     "stop_ripchamp.bat",
     "favicon.ico",
     "logo.png",
     "logo2.png",
-    "consolas-webfont.woff",
 ]
 PAYLOAD_DIRS = ["static"]
 
