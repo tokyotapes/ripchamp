@@ -46,6 +46,9 @@ Endpoints:
     GET  /browse                  pop a native file-open dialog, return the chosen path
     GET  /set-clip-directory      pop a native folder-choose dialog, save it as the local (non-upload) output dir
     GET  /set-watch-directory     pop a native folder-choose dialog, save it as the watcher's watch folder (setup page)
+    GET  /save-setup-settings?startAtStartup=yes|no&watchEnabled=yes|no&clipFolderEnabled=yes|no
+                                   save the setup page's choices to ripchamp_config.json and
+                                   install/remove the logon-start task (UAC prompt)
     GET  /add?path=<abs path>     add a file to the queue (called by the watcher, or the Browse button)
     GET  /item/<id>               picker page for one queued item
     GET  /item/<id>/config.json   per-item config picker.js fetches at load (filename, video URL, etc.)
@@ -132,6 +135,82 @@ def set_watch_directory(path: str):
     save_config(config)
 
 
+def get_start_at_startup() -> bool:
+    """The setup page's last-saved "Let RIPChamp Start Automatically?"
+    choice -- reflects what was saved, not the live Task Scheduler state.
+    Defaults to True, matching the radio's own default when unset."""
+    value = load_config().get("start_at_startup")
+    return True if value is None else bool(value)
+
+
+def set_start_at_startup(enabled: bool):
+    config = load_config()
+    config["start_at_startup"] = enabled
+    save_config(config)
+
+
+def get_watch_enabled() -> bool:
+    """The setup page's last-saved "Let us watch for new videos to clip?"
+    choice. Defaults to True, matching the radio's own default when unset."""
+    value = load_config().get("watch_enabled")
+    return True if value is None else bool(value)
+
+
+def set_watch_enabled(enabled: bool):
+    config = load_config()
+    config["watch_enabled"] = enabled
+    save_config(config)
+
+
+def get_clip_folder_enabled() -> bool:
+    """The setup page's last-saved "Choose a folder for local clips?"
+    choice. Defaults to False (unset clip_directory already means "save
+    next to the original file" -- this just remembers whether the user
+    deliberately opted into a custom folder)."""
+    value = load_config().get("clip_folder_enabled")
+    return False if value is None else bool(value)
+
+
+def set_clip_folder_enabled(enabled: bool):
+    config = load_config()
+    config["clip_folder_enabled"] = enabled
+    save_config(config)
+
+
+def run_elevated_tools_mode(mode: str, timeout: float = 90) -> tuple:
+    """Run `ripchamp_tools.ps1 -Mode <mode>` elevated, via a UAC prompt.
+
+    `schtasks /create` (used by -Mode InstallTask) fails with Access
+    Denied from this server's own normal, non-elevated process on this
+    machine, confirmed the hard way -- so InstallTask/DisableTask (from
+    the setup page's "Let RIPChamp Start Automatically?" toggle) need to
+    run in an elevated child process instead. Uses `Start-Process -Verb
+    RunAs -Wait -PassThru` from a throwaway (non-elevated) outer
+    PowerShell so it can wait for the elevated child and relay its exit
+    code -- passing arguments as a real PowerShell array avoids the
+    nested-quoting problems schtasks' own /tr argument is prone to.
+    Returns (success, error_detail)."""
+    script_path = SCRIPT_DIR / "ripchamp_tools.ps1"
+    wrapper = (
+        "try { "
+        f"$p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden "
+        f"-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','{script_path}','-Mode','{mode}'; "
+        "exit $p.ExitCode "
+        "} catch { exit 1 }"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", wrapper],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "Timed out waiting for the elevation (UAC) prompt to be approved."
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).strip()[-500:]
+        return False, detail or f"Failed or the UAC prompt was declined (exit code {result.returncode})."
+    return True, ""
+
+
 def _reload_if_changed(module):
     """Hot-reload a module if its source file has changed on disk since we
     last loaded it, so Python-logic edits to ripchamp_picker.py take
@@ -172,6 +251,14 @@ def get_watcher_status():
             wp_idx = cmdline.index("-WatchPath")
             if wp_idx + 1 < len(cmdline):
                 watch_path = cmdline[wp_idx + 1]
+        if not watch_path:
+            # -WatchPath won't be on the command line when the watcher was
+            # started directly (e.g. start_ripchamp.bat's fallback when no
+            # scheduled task exists yet) rather than via the scheduled task,
+            # which bakes -WatchPath in at InstallTask time. Fall back to
+            # the configured value -- Invoke-Watch reads the same config at
+            # startup, so this reflects what it's actually watching.
+            watch_path = get_watch_directory()
         # Compute the folder's basename here, in Python, rather than in the
         # embedded JS -- QUEUE_PAGE is a plain (non-raw) string, so a "\\"
         # meant for a JS regex silently collapses to a single "\" before the
@@ -494,6 +581,8 @@ class QueueHandler(BaseHTTPRequestHandler):
                 "watcher": get_watcher_status(),
                 "clip_directory": clip_dir, "clip_directory_name": clip_dir_name,
                 "watch_directory": watch_dir, "watch_directory_name": watch_dir_name,
+                "start_at_startup": get_start_at_startup(), "watch_enabled": get_watch_enabled(),
+                "clip_folder_enabled": get_clip_folder_enabled(),
             })
             return
 
@@ -513,6 +602,26 @@ class QueueHandler(BaseHTTPRequestHandler):
             if chosen:
                 set_watch_directory(chosen)
             self._send_json({"path": get_watch_directory()})
+            return
+
+        if parsed.path == "/save-setup-settings":
+            qs = urllib.parse.parse_qs(parsed.query)
+            start_at_startup = qs.get("startAtStartup", [None])[0]
+            watch_enabled = qs.get("watchEnabled", [None])[0]
+            clip_folder_enabled = qs.get("clipFolderEnabled", [None])[0]
+            if (start_at_startup not in ("yes", "no") or watch_enabled not in ("yes", "no")
+                    or clip_folder_enabled not in ("yes", "no")):
+                self.send_response(400)
+                self.end_headers()
+                return
+
+            set_start_at_startup(start_at_startup == "yes")
+            set_watch_enabled(watch_enabled == "yes")
+            set_clip_folder_enabled(clip_folder_enabled == "yes")
+
+            mode = "InstallTask" if start_at_startup == "yes" else "DisableTask"
+            ok, error = run_elevated_tools_mode(mode)
+            self._send_json({"ok": ok, "error": error})
             return
 
         if parsed.path == "/history-open-folder":

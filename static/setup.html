@@ -12,6 +12,9 @@
 <link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css">
 <link rel="stylesheet" href="/static/queue.css">
 <link rel="stylesheet" href="/static/picker.css">
+<style>
+  body { font-family: "JetBrains Mono", monospace; }
+</style>
 </head>
 <body>
 <div class="page">
@@ -53,30 +56,31 @@
     Discord, we can handle that. Because that's what I wanted and I think some
     of you will want that too.
   </p>
-  <button class="button" id="whoAskedBtn" style="margin-top: 16px;">who asked?</button>
+  <div style="text-align: center;">
+    <button class="button" id="whoAskedBtn" style="margin-top: 16px;">who asked?</button>
+  </div>
 </div>
 
 <div class="card">
   <h2>Server Setup</h2>
   <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
     The RIPChamp server is the glue that makes RIPChamp work. It's very small,
-    efficient, and uses minimal resources. We highly recommend letting
-    RIPChamp run the server at startup so everything runs smoothly.
+    efficient, and uses minimal resources.
   </p>
   <div class="row">
-    <label for="startupYes" style="min-width:0">Run RIPChamp at startup?</label>
+    <label for="startupYes" style="min-width:0; font-weight: 400;">Let RIPChamp Start Automatically? <span style="color: var(--text-dim); font-size: 14px; line-height: 1.6;">(We HIGHLY recommend letting the server start automatically)</span></label>
   </div>
   <div class="row">
     <label><input type="radio" id="startupYes" name="runAtStartup" value="yes" checked> Yes</label>
     <label><input type="radio" name="runAtStartup" value="no"> No</label>
+    <span class="hint-wrapper" id="startupNoHint" style="position: relative; top: 1px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
   </div>
 
   <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
 
   <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-    RIPChamp can watch a folder and it's sub-folders to check for new video
-    you want to clip. Just let us know where to look and we take care of
-    the rest.
+    RIPChamp can watch a folder (and its subfolders) for new clips
+    automatically. Just tell us where.
   </p>
   <div class="row">
     <label for="watchYes" style="min-width:0">Let us watch for new videos to clip?</label>
@@ -89,6 +93,24 @@
     <button class="button" id="browseWatchFolderBtn" type="button">Browse for Folder...</button>
     <span id="watchFolderLabel" style="color: var(--text-dim); font-size: 13px;">No folder selected</span>
   </div>
+
+  <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+    RIPChamp can save local clips to a folder of your choice.
+  </p>
+  <div class="row">
+    <label for="clipFolderYes" style="min-width:0">Choose a folder for local clips?</label>
+  </div>
+  <div class="row">
+    <label><input type="radio" id="clipFolderYes" name="clipFolderEnabled" value="yes"> Yes</label>
+    <label><input type="radio" name="clipFolderEnabled" value="no" checked> No</label>
+    <span class="hint-wrapper" id="clipFolderNoHint" style="position: relative; top: 1px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
+  </div>
+  <div class="row" id="clipFolderRow">
+    <button class="button" id="browseClipFolderBtn" type="button">Browse for Folder...</button>
+    <span id="clipFolderLabel" style="color: var(--text-dim); font-size: 13px;">No folder selected</span>
+  </div>
 </div>
 
 <div class="card">
@@ -99,11 +121,26 @@
     like ffmpeg. For now, head to the <a href="/" style="color: var(--accent);">clip queue</a> to get started.
   </p>
 </div>
+
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 4px;">
+  <div style="display: flex; justify-content: center; gap: 12px;">
+    <button class="danger" id="cancelSetupBtn">Cancel</button>
+    <button class="primary" id="saveSettingsBtn">Save Settings</button>
+  </div>
+  <span id="saveStatus" style="color: var(--text-dim); font-size: 13px;"></span>
+</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
 <script>
+const INTRO_DISMISSED_KEY = 'ripchampIntroDismissed';
+
+if (localStorage.getItem(INTRO_DISMISSED_KEY) === '1') {
+  document.getElementById('introCard').style.display = 'none';
+}
+
 document.getElementById('whoAskedBtn').addEventListener('click', () => {
+  localStorage.setItem(INTRO_DISMISSED_KEY, '1');
   const card = document.getElementById('introCard');
   if (typeof anime === 'undefined') {
     card.style.display = 'none';
@@ -123,6 +160,64 @@ document.getElementById('whoAskedBtn').addEventListener('click', () => {
   });
 });
 
+// Letter-by-letter reveal (same technique as the queue page's "?" hints,
+// adapted from https://tobiasahlin.com/moving-letters/#11 minus its
+// sweeping line) -- triggered by a radio choice here instead of hover.
+function buildHintHTML(text, highlights) {
+  highlights = highlights || [];
+  let html = '';
+  let i = 0;
+  while (i < text.length) {
+    const hit = highlights.find(h => text.startsWith(h.text, i));
+    if (hit) {
+      const letters = hit.text.replace(/\S/g, c => `<span class="letter">${c}</span>`);
+      html += `<span style="color:${hit.color}">${letters}</span>`;
+      i += hit.text.length;
+    } else {
+      const c = text[i];
+      html += /\S/.test(c) ? `<span class="letter">${c}</span>` : c;
+      i += 1;
+    }
+  }
+  return html;
+}
+
+function revealHint(lettersEl, cursorEl, text, highlights) {
+  lettersEl.innerHTML = buildHintHTML(text, highlights);
+  if (typeof anime === 'undefined') {
+    cursorEl.style.display = 'inline-block';
+    return;
+  }
+  anime.set(lettersEl.querySelectorAll('.letter'), { opacity: 0 });
+  cursorEl.style.display = 'none';
+  anime.timeline({
+    easing: 'easeOutExpo',
+    complete: () => { cursorEl.style.display = 'inline-block'; },
+  }).add({ targets: lettersEl.querySelectorAll('.letter'), opacity: [0, 1], duration: 400, delay: anime.stagger(18) });
+}
+
+function hideHint(lettersEl, cursorEl) {
+  cursorEl.style.display = 'none';
+  lettersEl.innerHTML = '';
+}
+
+const startupNoHintLetters = document.querySelector('#startupNoHint .hint-letters');
+const startupNoHintCursor = document.querySelector('#startupNoHint .hint-cursor');
+
+function updateStartupHint() {
+  const auto = document.querySelector('input[name=runAtStartup]:checked').value === 'yes';
+  if (auto) {
+    hideHint(startupNoHintLetters, startupNoHintCursor);
+  } else {
+    revealHint(startupNoHintLetters, startupNoHintCursor,
+      'Run start_ripchamp.bat & stop_ripchamp.bat in install directory for manual control.',
+      [{ text: 'start_ripchamp.bat', color: '#5865F2' }, { text: 'stop_ripchamp.bat', color: '#5865F2' }]);
+  }
+}
+document.querySelectorAll('input[name=runAtStartup]').forEach(
+  r => r.addEventListener('change', updateStartupHint));
+updateStartupHint();
+
 const watchFolderRow = document.getElementById('watchFolderRow');
 const watchFolderLabel = document.getElementById('watchFolderLabel');
 const browseWatchFolderBtn = document.getElementById('browseWatchFolderBtn');
@@ -139,9 +234,47 @@ function setWatchFolderLabel(path) {
   watchFolderLabel.textContent = path ? path : 'No folder selected';
 }
 
+function setRadioValue(name, value) {
+  const el = document.querySelector(`input[name=${name}][value="${value}"]`);
+  if (el) el.checked = true;
+}
+
+const clipFolderRow = document.getElementById('clipFolderRow');
+const clipFolderLabel = document.getElementById('clipFolderLabel');
+const browseClipFolderBtn = document.getElementById('browseClipFolderBtn');
+const clipFolderNoHintLetters = document.querySelector('#clipFolderNoHint .hint-letters');
+const clipFolderNoHintCursor = document.querySelector('#clipFolderNoHint .hint-cursor');
+
+function updateClipFolderVisibility() {
+  const enabled = document.querySelector('input[name=clipFolderEnabled]:checked').value === 'yes';
+  clipFolderRow.style.display = enabled ? 'flex' : 'none';
+  if (enabled) {
+    hideHint(clipFolderNoHintLetters, clipFolderNoHintCursor);
+  } else {
+    revealHint(clipFolderNoHintLetters, clipFolderNoHintCursor,
+      'If no, your local clip will save in same directory as original video.');
+  }
+}
+document.querySelectorAll('input[name=clipFolderEnabled]').forEach(
+  r => r.addEventListener('change', updateClipFolderVisibility));
+updateClipFolderVisibility();
+
+function setClipFolderLabel(path) {
+  clipFolderLabel.textContent = path ? path : 'No folder selected';
+}
+
 fetch('/status.json')
   .then(res => res.json())
-  .then(data => setWatchFolderLabel(data.watch_directory))
+  .then(data => {
+    setWatchFolderLabel(data.watch_directory);
+    setClipFolderLabel(data.clip_directory);
+    setRadioValue('runAtStartup', data.start_at_startup ? 'yes' : 'no');
+    setRadioValue('watchEnabled', data.watch_enabled ? 'yes' : 'no');
+    setRadioValue('clipFolderEnabled', data.clip_folder_enabled ? 'yes' : 'no');
+    updateStartupHint();
+    updateWatchFolderVisibility();
+    updateClipFolderVisibility();
+  })
   .catch(() => {});
 
 browseWatchFolderBtn.addEventListener('click', async () => {
@@ -152,6 +285,43 @@ browseWatchFolderBtn.addEventListener('click', async () => {
     if (data.path) { setWatchFolderLabel(data.path); }
   } finally {
     browseWatchFolderBtn.disabled = false;
+  }
+});
+
+browseClipFolderBtn.addEventListener('click', async () => {
+  browseClipFolderBtn.disabled = true;
+  try {
+    const res = await fetch('/set-clip-directory');
+    const data = await res.json();
+    if (data.path) { setClipFolderLabel(data.path); }
+  } finally {
+    browseClipFolderBtn.disabled = false;
+  }
+});
+
+const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+const saveStatus = document.getElementById('saveStatus');
+
+saveSettingsBtn.addEventListener('click', async () => {
+  const startAutomatically = document.querySelector('input[name=runAtStartup]:checked').value;
+  const watchEnabled = document.querySelector('input[name=watchEnabled]:checked').value;
+  const clipFolderEnabled = document.querySelector('input[name=clipFolderEnabled]:checked').value;
+
+  saveSettingsBtn.disabled = true;
+  saveStatus.textContent = startAutomatically === 'yes'
+    ? 'Waiting for administrator approval...'
+    : 'Saving...';
+
+  try {
+    const res = await fetch(`/save-setup-settings?startAtStartup=${startAutomatically}&watchEnabled=${watchEnabled}&clipFolderEnabled=${clipFolderEnabled}`);
+    const data = await res.json();
+    saveStatus.textContent = data.ok
+      ? 'Saved.'
+      : `Couldn't save: ${data.error || 'unknown error'}`;
+  } catch (e) {
+    saveStatus.textContent = "Couldn't reach the server to save.";
+  } finally {
+    saveSettingsBtn.disabled = false;
   }
 });
 </script>

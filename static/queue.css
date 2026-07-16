@@ -52,7 +52,7 @@ h2 {
 .hint-letters {
   display: inline-block; font-size: 14px; font-weight: 400; text-transform: none;
   letter-spacing: normal; color: var(--text-dim); white-space: nowrap; padding-left: 10px;
-  position: relative; top: -2px;
+  position: relative; top: 0;
 }
 .hint-letters .letter { display: inline-block; opacity: 0; }
 .hint-cursor { display: none; margin-left: 2px; color: var(--text-dim); position: relative; top: -2px; }

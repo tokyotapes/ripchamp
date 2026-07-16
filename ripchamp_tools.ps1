@@ -30,6 +30,11 @@ Usage:
       Removes that scheduled task and stops the watcher and queue server
       if either is running.
 
+  powershell -File ripchamp_tools.ps1 -Mode DisableTask
+      Removes the logon-start scheduled task only -- unlike UninstallTask,
+      doesn't touch anything currently running. Used by the setup page's
+      "Let RIPChamp Start Automatically?" -> No.
+
   powershell -File ripchamp_tools.ps1 -Mode Status
       Reports whether the watcher and queue server are currently running.
 
@@ -43,7 +48,7 @@ Usage:
 
 param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("Watch", "InstallTask", "UninstallTask", "Status", "AddDiscordChannel", "SetupYoutube")]
+    [ValidateSet("Watch", "InstallTask", "UninstallTask", "DisableTask", "Status", "AddDiscordChannel", "SetupYoutube")]
     [string]$Mode,
 
     [string]$WatchPath = "C:\Users\evan\Videos\NVIDIA",
@@ -130,7 +135,7 @@ function Invoke-Watch {
     if (Ensure-QueueServer) {
         Write-Host "Queue server ready at http://127.0.0.1:$QueuePort/ -- bookmark it and process clips whenever you're ready."
     } else {
-        Write-Host "Queue server unavailable -- new clips won't be queued until it's running. Try restart_ripchamp.bat." -ForegroundColor Yellow
+        Write-Host "Queue server unavailable -- new clips won't be queued until it's running. Try start_ripchamp.bat." -ForegroundColor Yellow
     }
 
     $watcher = New-Object System.IO.FileSystemWatcher
@@ -237,6 +242,16 @@ function Uninstall-WatcherTask {
     Write-Host "Removed the scheduled task and stopped the watcher and queue server (if either was active)."
 }
 
+function Disable-WatcherTask {
+    # Lighter-weight than UninstallTask -- only removes the logon trigger
+    # (idempotent: a no-op if it wasn't installed), does NOT touch any
+    # currently-running watcher/queue server. Used by the setup page's
+    # "Let RIPChamp Start Automatically?" -> No, which must not kill the
+    # very server process the setup page itself is being served from.
+    schtasks /delete /tn $TaskName /f 2>$null
+    Write-Host "RIPChamp will no longer start automatically at login. Anything currently running is untouched."
+}
+
 function Get-WatcherStatus {
     $proc = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
         Where-Object { $_.CommandLine -like "*ripchamp_tools.ps1*-Mode Watch*" -and $_.ProcessId -ne $PID }
@@ -277,6 +292,7 @@ switch ($Mode) {
     "Watch"             { Invoke-Watch }
     "InstallTask"       { Install-WatcherTask }
     "UninstallTask"     { Uninstall-WatcherTask }
+    "DisableTask"       { Disable-WatcherTask }
     "Status"            { Get-WatcherStatus }
     "AddDiscordChannel" { Add-DiscordChannel }
     "SetupYoutube"      { Install-YoutubeAuth }
