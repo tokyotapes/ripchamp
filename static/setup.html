@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>RIPChamp Setup</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Workbench&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css">
+<link rel="stylesheet" href="/static/queue.css">
+<link rel="stylesheet" href="/static/picker.css">
+</head>
+<body>
+<div class="page">
+<div class="brand">
+  <div class="brand-left">
+    <div class="title-row">
+      <img src="/logo2.png" alt="RIPChamp logo" class="logo">
+      <h1 class="brand-name"><span class="rip-part">RIP</span><span class="champ-part">Champ</span>(<span class="clip-part">Setup</span>) == <span class="queue-part">true</span><span class="cursor-blink">_</span></h1>
+    </div>
+    <div class="sub">First-run setup -- this page is a placeholder for now.</div>
+  </div>
+</div>
+
+<div class="card" id="introCard">
+  <p style="color: var(--text); font-size: 18px; font-weight: 600; margin: 0 0 16px;">
+    ClipChamp is fucking terrible.
+  </p>
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
+    It embodies everything that is wrong with the modern Microsoft Corporation.
+  </p>
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
+    It's bloated with tons of features no one asked for.<br>
+    It chains you to a Microsoft account and nags you to upload everything to OneDrive.
+  </p>
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
+    Of course none of that matters if you can't reliably use it or keep it from crashing!
+  </p>
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
+    I hate ClipChamp so that's why I made RIPChamp.
+  </p>
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0;">
+    RIPChamp is a back-to-basics clipping engine without the bullshit. A watcher
+    agent monitors folders you choose for new video files. In a simple web
+    interface you can see the queue of all the new videos ready to be clipped
+    and proceed whenever you are ready. Inside the Trim page you will find a
+    video preview and an intuitive interface for selecting the start and stop
+    time of the new clip. Want to make it a local file? No problem. Want to
+    upload to YouTube or Streamable? Sure thing. Post a link to the clip in
+    Discord, we can handle that. Because that's what I wanted and I think some
+    of you will want that too.
+  </p>
+  <button class="button" id="whoAskedBtn" style="margin-top: 16px;">who asked?</button>
+</div>
+
+<div class="card">
+  <h2>Server Setup</h2>
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+    The RIPChamp server is the glue that makes RIPChamp work. It's very small,
+    efficient, and uses minimal resources. We highly recommend letting
+    RIPChamp run the server at startup so everything runs smoothly.
+  </p>
+  <div class="row">
+    <label for="startupYes" style="min-width:0">Run RIPChamp at startup?</label>
+  </div>
+  <div class="row">
+    <label><input type="radio" id="startupYes" name="runAtStartup" value="yes" checked> Yes</label>
+    <label><input type="radio" name="runAtStartup" value="no"> No</label>
+  </div>
+
+  <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+    RIPChamp can watch a folder and it's sub-folders to check for new video
+    you want to clip. Just let us know where to look and we take care of
+    the rest.
+  </p>
+  <div class="row">
+    <label for="watchYes" style="min-width:0">Let us watch for new videos to clip?</label>
+  </div>
+  <div class="row">
+    <label><input type="radio" id="watchYes" name="watchEnabled" value="yes" checked> Yes</label>
+    <label><input type="radio" name="watchEnabled" value="no"> No</label>
+  </div>
+  <div class="row" id="watchFolderRow">
+    <button class="button" id="browseWatchFolderBtn" type="button">Browse for Folder...</button>
+    <span id="watchFolderLabel" style="color: var(--text-dim); font-size: 13px;">No folder selected</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Coming soon</h2>
+  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0;">
+    RIPChamp is installed. This page will walk through configuring your
+    watch folder, Discord/YouTube/Streamable, and checking dependencies
+    like ffmpeg. For now, head to the <a href="/" style="color: var(--accent);">clip queue</a> to get started.
+  </p>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
+<script>
+document.getElementById('whoAskedBtn').addEventListener('click', () => {
+  const card = document.getElementById('introCard');
+  if (typeof anime === 'undefined') {
+    card.style.display = 'none';
+    return;
+  }
+  anime({
+    targets: card,
+    opacity: [1, 0],
+    height: [card.offsetHeight, 0],
+    marginBottom: [20, 0],
+    paddingTop: [20, 0],
+    paddingBottom: [20, 0],
+    duration: 450,
+    easing: 'easeInOutQuad',
+    begin: () => { card.style.overflow = 'hidden'; },
+    complete: () => { card.style.display = 'none'; },
+  });
+});
+
+const watchFolderRow = document.getElementById('watchFolderRow');
+const watchFolderLabel = document.getElementById('watchFolderLabel');
+const browseWatchFolderBtn = document.getElementById('browseWatchFolderBtn');
+
+function updateWatchFolderVisibility() {
+  const enabled = document.querySelector('input[name=watchEnabled]:checked').value === 'yes';
+  watchFolderRow.style.display = enabled ? 'flex' : 'none';
+}
+document.querySelectorAll('input[name=watchEnabled]').forEach(
+  r => r.addEventListener('change', updateWatchFolderVisibility));
+updateWatchFolderVisibility();
+
+function setWatchFolderLabel(path) {
+  watchFolderLabel.textContent = path ? path : 'No folder selected';
+}
+
+fetch('/status.json')
+  .then(res => res.json())
+  .then(data => setWatchFolderLabel(data.watch_directory))
+  .catch(() => {});
+
+browseWatchFolderBtn.addEventListener('click', async () => {
+  browseWatchFolderBtn.disabled = true;
+  try {
+    const res = await fetch('/set-watch-directory');
+    const data = await res.json();
+    if (data.path) { setWatchFolderLabel(data.path); }
+  } finally {
+    browseWatchFolderBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

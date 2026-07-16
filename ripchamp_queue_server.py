@@ -26,10 +26,16 @@ logic is hot-reloaded automatically whenever the file changes on disk
 logic still require a restart.
 
 Usage:
-    python ripchamp_queue_server.py [--port 8787]
+    python ripchamp_queue_server.py [--port 8787] [--open-setup]
+
+    --open-setup opens a browser to /setup once the server is listening --
+    only the installer passes this, for the first-run experience. Normal
+    startups (the watcher's Ensure-QueueServer) never pass it, so logging
+    in doesn't pop a browser tab every time.
 
 Endpoints:
     GET  /                        queue page (bookmark this)
+    GET  /setup                   first-run setup page (opened automatically with --open-setup)
     GET  /static/queue.css        queue page stylesheet
     GET  /static/queue.js         queue page script
     GET  /static/picker.css       picker page stylesheet
@@ -39,6 +45,7 @@ Endpoints:
     GET  /status.json             pending/active/history as JSON (polled by the page)
     GET  /browse                  pop a native file-open dialog, return the chosen path
     GET  /set-clip-directory      pop a native folder-choose dialog, save it as the local (non-upload) output dir
+    GET  /set-watch-directory     pop a native folder-choose dialog, save it as the watcher's watch folder (setup page)
     GET  /add?path=<abs path>     add a file to the queue (called by the watcher, or the Browse button)
     GET  /item/<id>               picker page for one queued item
     GET  /item/<id>/config.json   per-item config picker.js fetches at load (filename, video URL, etc.)
@@ -59,6 +66,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -105,6 +113,22 @@ def get_clip_directory() -> str | None:
 def set_clip_directory(path: str):
     config = load_config()
     config["clip_directory"] = path
+    save_config(config)
+
+
+def get_watch_directory() -> str | None:
+    """The folder the watcher (ripchamp_tools.ps1 -Mode Watch) should watch
+    for new clips, if set via the setup page's "Browse for Folder..."
+    button -- None means the watcher's own hardcoded default. Read by
+    Invoke-Watch at startup and polled periodically for live changes (see
+    ripchamp_tools.ps1), so changing this here takes effect without
+    restarting the watcher."""
+    return load_config().get("watch_directory") or None
+
+
+def set_watch_directory(path: str):
+    config = load_config()
+    config["watch_directory"] = path
     save_config(config)
 
 
@@ -178,10 +202,10 @@ def open_file_dialog():
     return path or None
 
 
-def open_directory_dialog() -> str | None:
-    """Pop a native "choose folder" dialog for the Clips Directory setting
-    -- where local (non-upload) crops and mp3s get saved instead of next
-    to the original file."""
+def open_directory_dialog(title: str) -> str | None:
+    """Pop a native "choose folder" dialog -- used for both the Clips
+    Directory setting (local, non-upload output) and the setup page's
+    watch-folder picker."""
     import tkinter as tk
     from tkinter import filedialog
 
@@ -189,7 +213,7 @@ def open_directory_dialog() -> str | None:
     root.withdraw()
     root.attributes("-topmost", True)
     try:
-        path = filedialog.askdirectory(title="Choose a folder for local (non-upload) clips and mp3s")
+        path = filedialog.askdirectory(title=title)
     finally:
         root.destroy()
     return path or None
@@ -423,6 +447,10 @@ class QueueHandler(BaseHTTPRequestHandler):
             _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.html")
             return
 
+        if parsed.path == "/setup":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "setup.html")
+            return
+
         if parsed.path == "/static/queue.css":
             _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.css")
             return
@@ -454,15 +482,18 @@ class QueueHandler(BaseHTTPRequestHandler):
         if parsed.path == "/status.json":
             pending, active, history = STATE.snapshot()
             clip_dir = get_clip_directory()
+            watch_dir = get_watch_directory()
             # Compute the folder's basename here in Python, not via a client-side
             # split -- QUEUE_PAGE is a plain (non-raw) string, so a "\\" meant for
             # a JS regex silently collapses to "\" before the JS ever sees it,
             # breaking Windows path splitting (bit us once already for the watcher).
             clip_dir_name = Path(clip_dir).name if clip_dir else None
+            watch_dir_name = Path(watch_dir).name if watch_dir else None
             self._send_json({
                 "pending": pending, "active": active, "history": history,
                 "watcher": get_watcher_status(),
                 "clip_directory": clip_dir, "clip_directory_name": clip_dir_name,
+                "watch_directory": watch_dir, "watch_directory_name": watch_dir_name,
             })
             return
 
@@ -471,10 +502,17 @@ class QueueHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/set-clip-directory":
-            chosen = open_directory_dialog()
+            chosen = open_directory_dialog("Choose a folder for local (non-upload) clips and mp3s")
             if chosen:
                 set_clip_directory(chosen)
             self._send_json({"path": get_clip_directory()})
+            return
+
+        if parsed.path == "/set-watch-directory":
+            chosen = open_directory_dialog("Choose a folder to watch for new clips")
+            if chosen:
+                set_watch_directory(chosen)
+            self._send_json({"path": get_watch_directory()})
             return
 
         if parsed.path == "/history-open-folder":
@@ -610,6 +648,8 @@ class SingleInstanceServer(ThreadingHTTPServer):
 def main():
     parser = argparse.ArgumentParser(description="Persistent bookmarkable queue for ripchamp clips.")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--open-setup", action="store_true",
+        help="Open a browser to /setup once listening -- used by the installer for the first-run experience.")
     args = parser.parse_args()
 
     try:
@@ -619,6 +659,8 @@ def main():
         sys.exit(0)
 
     print(f"Queue server running at http://127.0.0.1:{args.port}/", file=sys.stderr)
+    if args.open_setup:
+        webbrowser.open(f"http://127.0.0.1:{args.port}/setup")
     server.serve_forever()
 
 

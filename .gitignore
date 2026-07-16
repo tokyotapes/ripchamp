@@ -21,6 +21,11 @@ __pycache__/
 # Claude Code session-local settings (tool-permission allowlist, not project config)
 .claude/settings.local.json
 
+# PyInstaller build output (built via installer/build.ps1, not source)
+installer/build/
+installer/dist/
+installer/*.spec
+
 # OS cruft
 Thumbs.db
 .DS_Store

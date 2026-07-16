@@ -18,6 +18,11 @@ Usage:
       process clips whenever you're ready, so a clip finishing mid-game
       doesn't yank focus away from it. Leave running -- Ctrl+C to stop.
 
+      If ripchamp_config.json has a watch_directory (set via the setup
+      page's "Browse for Folder..." button), it overrides -WatchPath at
+      startup, and is also polled every 5s while running so changing it
+      later takes effect live, no restart needed.
+
   powershell -File ripchamp_tools.ps1 -Mode InstallTask [-WatchPath "C:\..."]
       Registers a scheduled task to run -Mode Watch hidden at every logon.
 
@@ -47,6 +52,18 @@ param(
 
 $TaskName = "RIPChampWatcher"
 $QueuePort = 8787
+
+function Get-ConfiguredWatchPath {
+    # Set via the setup page's "Browse for Folder..." button (saved to
+    # ripchamp_config.json's watch_directory key by ripchamp_queue_server.py).
+    # None/missing means fall back to the -WatchPath default.
+    if (-not (Test-Path $ConfigPath)) { return $null }
+    try {
+        $config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+        if ($config.watch_directory) { return $config.watch_directory }
+    } catch { }
+    return $null
+}
 
 function Ensure-QueueServer {
     try {
@@ -78,6 +95,7 @@ function Ensure-QueueServer {
 if (-not $ScriptDir) {
     $ScriptDir = Split-Path -Parent $PSCommandPath
 }
+$ConfigPath = Join-Path $ScriptDir "ripchamp_config.json"
 
 Add-Type @"
 using System;
@@ -97,6 +115,11 @@ function Invoke-Watch {
     $consoleHandle = [RIPChampWin32]::GetConsoleWindow()
     if ($consoleHandle -ne [IntPtr]::Zero) {
         [RIPChampWin32]::ShowWindow($consoleHandle, 0) | Out-Null  # SW_HIDE
+    }
+
+    $configuredPath = Get-ConfiguredWatchPath
+    if ($configuredPath) {
+        $WatchPath = $configuredPath
     }
 
     if (-not (Test-Path $WatchPath)) {
@@ -166,7 +189,21 @@ function Invoke-Watch {
         -MessageData @{ QueuePort = $QueuePort } | Out-Null
 
     Write-Host "Watching '$WatchPath' and subfolders for new .mp4 files. Press Ctrl+C to stop."
-    while ($true) { Start-Sleep -Seconds 1 }
+
+    # Poll for the watch folder changing in the config (set via the setup
+    # page) so a new folder takes effect live, without restarting the
+    # watcher -- FileSystemWatcher supports updating .Path while running.
+    while ($true) {
+        Start-Sleep -Seconds 5
+        $configuredPath = Get-ConfiguredWatchPath
+        if ($configuredPath -and $configuredPath -ne $WatchPath -and (Test-Path $configuredPath)) {
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Watch folder changed -- now watching '$configuredPath'"
+            $watcher.EnableRaisingEvents = $false
+            $watcher.Path = $configuredPath
+            $WatchPath = $configuredPath
+            $watcher.EnableRaisingEvents = $true
+        }
+    }
 }
 
 function Install-WatcherTask {
