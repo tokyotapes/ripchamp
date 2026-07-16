@@ -223,9 +223,12 @@ def build_result(data: dict) -> dict:
         output["destination"] = data.get("destination", "upload")
         if output["destination"] == "upload":
             output["videoHost"] = data.get("videoHost", "youtube")
-            discord_channel = data.get("discordChannel")
-            if discord_channel:
-                output["discordChannel"] = discord_channel
+            if data.get("postToDiscord") is False:
+                output["postToDiscord"] = False
+            else:
+                discord_channel = data.get("discordChannel")
+                if discord_channel:
+                    output["discordChannel"] = discord_channel
 
     return output
 
@@ -265,7 +268,9 @@ def build_ripchamp_args(input_path: str, result: dict, clip_dir: str | None = No
         args += ["--delete-after-upload"]
         if result.get("videoHost") == "streamable":
             args += ["--video-host", "streamable"]
-        if result.get("discordChannel"):
+        if result.get("postToDiscord") is False:
+            args += ["--no-discord"]
+        elif result.get("discordChannel"):
             args += ["--discord-channel", result["discordChannel"]]
 
     return args

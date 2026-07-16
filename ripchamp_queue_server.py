@@ -40,6 +40,9 @@ Endpoints:
     GET  /static/queue.js         queue page script
     GET  /static/picker.css       picker page stylesheet
     GET  /static/picker.js        picker page script
+    GET  /static/youtube-icon.gif   tiny YouTube icon
+    GET  /static/streamable-icon.gif tiny Streamable icon
+    GET  /static/discord-icon.gif   tiny Discord icon
     GET  /favicon.ico             browser tab icon
     GET  /logo.png                logo shown next to the page title
     GET  /status.json             pending/active/history as JSON (polled by the page)
@@ -49,6 +52,10 @@ Endpoints:
     GET  /save-setup-settings?startAtStartup=yes|no&watchEnabled=yes|no&clipFolderEnabled=yes|no
                                    save the setup page's choices to ripchamp_config.json and
                                    install/remove the logon-start task (UAC prompt)
+    GET  /discord-webhooks        saved Discord webhooks (name + date added), from the encrypted store
+    GET  /save-discord-webhook?name=<channel>&url=<webhook url>
+                                   validate and save a Discord webhook, encrypted at rest (setup page)
+    GET  /delete-discord-webhook?name=<channel>  remove a saved Discord webhook
     GET  /add?path=<abs path>     add a file to the queue (called by the watcher, or the Browse button)
     GET  /item/<id>               picker page for one queued item
     GET  /item/<id>/config.json   per-item config picker.js fetches at load (filename, video URL, etc.)
@@ -75,6 +82,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ripchamp_picker
+import ripchamp_secrets
 try:
     from ripchamp import load_discord_webhooks
 except ImportError:
@@ -175,6 +183,11 @@ def set_clip_folder_enabled(enabled: bool):
     config = load_config()
     config["clip_folder_enabled"] = enabled
     save_config(config)
+
+
+def is_valid_discord_webhook_url(url: str) -> bool:
+    return bool(re.match(
+        r"^https://(discord\.com|discordapp\.com)/api/webhooks/\d+/[\w-]+/?$", url))
 
 
 def run_elevated_tools_mode(mode: str, timeout: float = 90) -> tuple:
@@ -554,6 +567,18 @@ class QueueHandler(BaseHTTPRequestHandler):
             _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "picker.js")
             return
 
+        if parsed.path == "/static/youtube-icon.gif":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "youtube-icon.gif")
+            return
+
+        if parsed.path == "/static/streamable-icon.gif":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "streamable-icon.gif")
+            return
+
+        if parsed.path == "/static/discord-icon.gif":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "discord-icon.gif")
+            return
+
         if parsed.path == "/favicon.ico":
             _reload_if_changed(ripchamp_picker).serve_static_file(self, SCRIPT_DIR / "favicon.ico")
             return
@@ -622,6 +647,38 @@ class QueueHandler(BaseHTTPRequestHandler):
             mode = "InstallTask" if start_at_startup == "yes" else "DisableTask"
             ok, error = run_elevated_tools_mode(mode)
             self._send_json({"ok": ok, "error": error})
+            return
+
+        if parsed.path == "/discord-webhooks":
+            webhooks = ripchamp_secrets.get_discord_webhooks_with_added()
+            self._send_json({
+                "webhooks": [
+                    {"name": name, "added": entry["added"]}
+                    for name, entry in webhooks.items()
+                ]
+            })
+            return
+
+        if parsed.path == "/save-discord-webhook":
+            qs = urllib.parse.parse_qs(parsed.query)
+            name = (qs.get("name", [None])[0] or "").strip()
+            url = (qs.get("url", [None])[0] or "").strip()
+            if not name or not url:
+                self._send_json({"ok": False, "error": "Channel name and webhook URL are both required."})
+                return
+            if not is_valid_discord_webhook_url(url):
+                self._send_json({"ok": False, "error": "That doesn't look like a Discord webhook URL."})
+                return
+            ripchamp_secrets.set_discord_webhook(name, url)
+            self._send_json({"ok": True})
+            return
+
+        if parsed.path == "/delete-discord-webhook":
+            qs = urllib.parse.parse_qs(parsed.query)
+            name = (qs.get("name", [None])[0] or "").strip()
+            if name:
+                ripchamp_secrets.delete_discord_webhook(name)
+            self._send_json({"ok": True})
             return
 
         if parsed.path == "/history-open-folder":

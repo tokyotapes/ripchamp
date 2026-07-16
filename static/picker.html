@@ -73,11 +73,16 @@
       <label><input type="radio" name="dest" value="local"> Local only (just crop, don't upload)</label>
     </div>
     <div class="row" id="hostRow" style="display:none">
-      <label><input type="radio" name="videoHost" value="youtube" checked> YouTube</label>
-      <label><input type="radio" name="videoHost" value="streamable"> Streamable (max 250MB)</label>
+      <label><input type="radio" name="videoHost" value="youtube" checked> <img src="/static/youtube-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> YouTube</label>
+      <label><input type="radio" name="videoHost" value="streamable"> <img src="/static/streamable-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> Streamable (max 250MB)</label>
+    </div>
+    <div class="row" id="discordPostRow" style="display:none">
+      <label for="discordPostYes" style="min-width:0"><img src="/static/discord-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> Post to Discord?</label>
+      <label><input type="radio" id="discordPostYes" name="postToDiscord" value="yes" checked> Yes</label>
+      <label><input type="radio" name="postToDiscord" value="no"> No</label>
     </div>
     <div class="row" id="channelRow" style="display:none">
-      <label for="channelSelect" style="min-width:40px">Discord</label>
+      <label for="channelSelect" style="min-width:40px"><img src="/static/discord-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> Discord</label>
       <select id="channelSelect"></select>
     </div>
   </div>

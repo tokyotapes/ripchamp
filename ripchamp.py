@@ -241,28 +241,10 @@ def run_ffmpeg(
 # --- Discord ---
 
 def load_discord_webhooks() -> dict[str, str]:
-    """Load named webhooks from discord_webhooks.txt (one 'name=url' per
-    line). Falls back to the legacy single-URL discord_webhook.txt as a
-    channel named 'default' for backward compatibility."""
-    script_dir = Path(__file__).resolve().parent
-    webhooks: dict[str, str] = {}
-    multi_path = script_dir / "discord_webhooks.txt"
-    if multi_path.is_file():
-        for line in multi_path.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            name, url = line.split("=", 1)
-            name, url = name.strip(), url.strip()
-            if name and url:
-                webhooks[name] = url  # later lines with the same name overwrite earlier ones
-    if not webhooks:
-        legacy_path = script_dir / "discord_webhook.txt"
-        if legacy_path.is_file():
-            url = legacy_path.read_text().strip()
-            if url:
-                webhooks["default"] = url
-    return webhooks
+    """Named webhooks from the encrypted store (ripchamp_secrets.json, what
+    the setup page's Discord Integration card writes)."""
+    import ripchamp_secrets
+    return ripchamp_secrets.get_discord_webhooks()
 
 
 def get_webhook_url(args) -> str | None:

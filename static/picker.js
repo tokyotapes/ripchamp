@@ -11,6 +11,7 @@ const volumeSlider = document.getElementById('volumeSlider');
 const volumeIcon = document.getElementById('volumeIcon');
 const videoOptions = document.getElementById('videoOptions');
 const hostRow = document.getElementById('hostRow');
+const discordPostRow = document.getElementById('discordPostRow');
 const channelRow = document.getElementById('channelRow');
 const channelSelect = document.getElementById('channelSelect');
 const titleInput = document.getElementById('titleInput');
@@ -50,11 +51,15 @@ function updateVisibility() {
   videoOptions.style.display = (type === 'video') ? 'block' : 'none';
   const dest = document.querySelector('input[name=dest]:checked').value;
   hostRow.style.display = (type === 'video' && dest === 'upload') ? 'flex' : 'none';
-  channelRow.style.display = (type === 'video' && dest === 'upload' && CONFIG.channels.length > 1) ? 'flex' : 'none';
+  const showDiscordPost = type === 'video' && dest === 'upload' && CONFIG.channels.length > 0;
+  discordPostRow.style.display = showDiscordPost ? 'flex' : 'none';
+  const postToDiscord = document.querySelector('input[name=postToDiscord]:checked').value === 'yes';
+  channelRow.style.display = (showDiscordPost && postToDiscord) ? 'flex' : 'none';
 }
 
 document.querySelectorAll('input[name=type]').forEach(r => r.addEventListener('change', updateVisibility));
 document.querySelectorAll('input[name=dest]').forEach(r => r.addEventListener('change', updateVisibility));
+document.querySelectorAll('input[name=postToDiscord]').forEach(r => r.addEventListener('change', updateVisibility));
 updateVisibility();
 
 v.addEventListener('loadedmetadata', () => {
@@ -121,8 +126,11 @@ document.getElementById('confirmBtn').addEventListener('click', async () => {
     body.destination = document.querySelector('input[name=dest]:checked').value;
     if (body.destination === 'upload') {
       body.videoHost = document.querySelector('input[name=videoHost]:checked').value;
-      if (CONFIG.channels.length > 1) {
-        body.discordChannel = channelSelect.value;
+      if (CONFIG.channels.length > 0) {
+        body.postToDiscord = document.querySelector('input[name=postToDiscord]:checked').value === 'yes';
+        if (body.postToDiscord) {
+          body.discordChannel = channelSelect.value;
+        }
       }
     }
   }

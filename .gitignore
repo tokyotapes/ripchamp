@@ -8,6 +8,11 @@ youtube_token.json
 # Local machine config (personal paths, not portable)
 ripchamp_config.json
 
+# DPAPI-encrypted secrets (Discord webhooks, YouTube client secret/token) --
+# only decrypts under the Windows account that created it, so it's not
+# portable anyway, but never sync it
+ripchamp_secrets.json
+
 # Generated/runtime files
 __pycache__/
 *.pyc

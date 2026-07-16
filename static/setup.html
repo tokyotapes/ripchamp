@@ -88,10 +88,11 @@
   <div class="row">
     <label><input type="radio" id="watchYes" name="watchEnabled" value="yes" checked> Yes</label>
     <label><input type="radio" name="watchEnabled" value="no"> No</label>
+    <span class="hint-wrapper" id="watchNoHint" style="position: relative; top: 1px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
   </div>
   <div class="row" id="watchFolderRow">
     <button class="button" id="browseWatchFolderBtn" type="button">Browse for Folder...</button>
-    <span id="watchFolderLabel" style="color: var(--text-dim); font-size: 13px;">No folder selected</span>
+    <span id="watchFolderLabel" style="display: inline-block; color: var(--text-dim); font-size: 13px; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; background: var(--bg);">No folder selected</span>
   </div>
 
   <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
@@ -109,8 +110,29 @@
   </div>
   <div class="row" id="clipFolderRow">
     <button class="button" id="browseClipFolderBtn" type="button">Browse for Folder...</button>
-    <span id="clipFolderLabel" style="color: var(--text-dim); font-size: 13px;">No folder selected</span>
+    <span id="clipFolderLabel" style="display: inline-block; color: var(--text-dim); font-size: 13px; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; background: var(--bg);">No folder selected</span>
   </div>
+</div>
+
+<div class="card">
+  <h2><img src="/static/discord-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> Discord Integration</h2>
+  <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 8px;">
+    RIPChamp posts finished clips to a Discord channel using a webhook. To create one:
+  </p>
+  <ul style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 16px; padding-left: 20px; list-style: disc;">
+    <li style="display: list-item; padding: 0; border: none; background: none; margin-bottom: 6px;">Go to <strong style="color: #5865F2;">Server Settings &rarr; Integrations &rarr; Webhooks</strong></li>
+    <li style="display: list-item; padding: 0; border: none; background: none; margin-bottom: 6px;">Click <strong>New Webhook</strong>, pick the channel you want clips posted to, save your settings, then click <strong>Copy Webhook URL</strong></li>
+    <li style="display: list-item; padding: 0; border: none; background: none;">Paste that URL below along with a name for the channel (just for your own reference -- this is what you'll pass to <code>--discord-channel</code>)</li>
+  </ul>
+
+  <div class="row">
+    <input type="text" id="webhookNameInput" placeholder="Channel name (e.g. clips)" style="flex: 1; min-width: 140px;">
+    <input type="text" id="webhookUrlInput" placeholder="https://discord.com/api/webhooks/..." style="flex: 2; min-width: 220px;">
+    <button class="button" id="saveWebhookBtn" type="button">Save Webhook</button>
+  </div>
+  <div id="webhookSaveError" style="color: var(--danger); font-size: 13px; margin-top: 8px; display: none;"></div>
+
+  <ul id="webhookList" style="list-style: none; padding: 0; margin: 16px 0 0;"></ul>
 </div>
 
 <div class="card">
@@ -182,7 +204,15 @@ function buildHintHTML(text, highlights) {
   return html;
 }
 
+// Tracks the most recent reveal/hide call per hint so a stale animation's
+// `complete` callback can't turn the cursor back on after a later call
+// (e.g. the initial DOM-default state getting overridden moments later by
+// the /status.json response) already hid it.
+const hintTokens = new WeakMap();
+
 function revealHint(lettersEl, cursorEl, text, highlights) {
+  const token = Symbol();
+  hintTokens.set(lettersEl, token);
   lettersEl.innerHTML = buildHintHTML(text, highlights);
   if (typeof anime === 'undefined') {
     cursorEl.style.display = 'inline-block';
@@ -192,11 +222,14 @@ function revealHint(lettersEl, cursorEl, text, highlights) {
   cursorEl.style.display = 'none';
   anime.timeline({
     easing: 'easeOutExpo',
-    complete: () => { cursorEl.style.display = 'inline-block'; },
+    complete: () => {
+      if (hintTokens.get(lettersEl) === token) { cursorEl.style.display = 'inline-block'; }
+    },
   }).add({ targets: lettersEl.querySelectorAll('.letter'), opacity: [0, 1], duration: 400, delay: anime.stagger(18) });
 }
 
 function hideHint(lettersEl, cursorEl) {
+  hintTokens.set(lettersEl, Symbol());
   cursorEl.style.display = 'none';
   lettersEl.innerHTML = '';
 }
@@ -221,10 +254,18 @@ updateStartupHint();
 const watchFolderRow = document.getElementById('watchFolderRow');
 const watchFolderLabel = document.getElementById('watchFolderLabel');
 const browseWatchFolderBtn = document.getElementById('browseWatchFolderBtn');
+const watchNoHintLetters = document.querySelector('#watchNoHint .hint-letters');
+const watchNoHintCursor = document.querySelector('#watchNoHint .hint-cursor');
 
 function updateWatchFolderVisibility() {
   const enabled = document.querySelector('input[name=watchEnabled]:checked').value === 'yes';
   watchFolderRow.style.display = enabled ? 'flex' : 'none';
+  if (enabled) {
+    hideHint(watchNoHintLetters, watchNoHintCursor);
+  } else {
+    revealHint(watchNoHintLetters, watchNoHintCursor,
+      'Click the "browse for a file" button at the top right of the queue page to pick videos manually.');
+  }
 }
 document.querySelectorAll('input[name=watchEnabled]').forEach(
   r => r.addEventListener('change', updateWatchFolderVisibility));
@@ -324,6 +365,87 @@ saveSettingsBtn.addEventListener('click', async () => {
     saveSettingsBtn.disabled = false;
   }
 });
+
+const webhookNameInput = document.getElementById('webhookNameInput');
+const webhookUrlInput = document.getElementById('webhookUrlInput');
+const saveWebhookBtn = document.getElementById('saveWebhookBtn');
+const webhookSaveError = document.getElementById('webhookSaveError');
+const webhookList = document.getElementById('webhookList');
+
+function renderWebhookList(webhooks) {
+  webhookList.innerHTML = '';
+  if (!webhooks.length) {
+    const li = document.createElement('li');
+    li.textContent = 'No webhooks saved yet.';
+    li.style.cssText = 'color: var(--text-dim); font-size: 13px; padding: 8px 0; padding-left: 14px;';
+    webhookList.appendChild(li);
+    return;
+  }
+  webhooks.forEach(w => {
+    const li = document.createElement('li');
+    li.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 8px 0; padding-left: 14px; border-bottom: 1px solid var(--border);';
+    const label = document.createElement('span');
+    label.style.cssText = 'font-size: 13px;';
+    const addedDate = w.added ? new Date(w.added).toLocaleDateString() : 'unknown date';
+    label.innerHTML = `<strong>${w.name}</strong> <span style="color: var(--text-dim);">Added ${addedDate}</span>`;
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'danger';
+    removeBtn.type = 'button';
+    removeBtn.textContent = 'Remove';
+    removeBtn.style.cssText = 'margin-left: auto;';
+    removeBtn.addEventListener('click', () => removeWebhook(w.name));
+    li.appendChild(label);
+    li.appendChild(removeBtn);
+    webhookList.appendChild(li);
+  });
+}
+
+async function loadWebhooks() {
+  try {
+    const res = await fetch('/discord-webhooks');
+    const data = await res.json();
+    renderWebhookList(data.webhooks || []);
+  } catch (e) {
+    renderWebhookList([]);
+  }
+}
+loadWebhooks();
+
+saveWebhookBtn.addEventListener('click', async () => {
+  const name = webhookNameInput.value.trim();
+  const url = webhookUrlInput.value.trim();
+  webhookSaveError.style.display = 'none';
+
+  if (!name || !url) {
+    webhookSaveError.textContent = 'Channel name and webhook URL are both required.';
+    webhookSaveError.style.display = 'block';
+    return;
+  }
+
+  saveWebhookBtn.disabled = true;
+  try {
+    const res = await fetch(`/save-discord-webhook?name=${encodeURIComponent(name)}&url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    if (data.ok) {
+      webhookNameInput.value = '';
+      webhookUrlInput.value = '';
+      loadWebhooks();
+    } else {
+      webhookSaveError.textContent = data.error || "Couldn't save that webhook.";
+      webhookSaveError.style.display = 'block';
+    }
+  } catch (e) {
+    webhookSaveError.textContent = "Couldn't reach the server to save.";
+    webhookSaveError.style.display = 'block';
+  } finally {
+    saveWebhookBtn.disabled = false;
+  }
+});
+
+async function removeWebhook(name) {
+  await fetch(`/delete-discord-webhook?name=${encodeURIComponent(name)}`);
+  loadWebhooks();
+}
 </script>
 </body>
 </html>
