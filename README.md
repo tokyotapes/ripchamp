@@ -24,6 +24,8 @@ installer, a first-run setup page, and encrypted local storage for all credentia
 
 ## Features
 
+<img src="static/img/purpose.jpg" align="right" width="200">
+
 - **Folder watcher** — monitors one folder (and its subfolders) for new recordings and
   adds them to the queue automatically; nothing pops up or steals focus while you're
   mid-game.
@@ -56,6 +58,8 @@ installer, a first-run setup page, and encrypted local storage for all credentia
   back to CPU encoding if none are available.
 - **HDR tone-mapping** — auto-detects HDR sources and tone-maps down to SDR instead of
   producing a washed-out flat image.
+
+<br clear="right">
 
 ## Requirements
 
