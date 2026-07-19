@@ -67,12 +67,14 @@ PAYLOAD_FILES = [
     "ripchamp.py",
     "ripchamp_picker.py",
     "ripchamp_queue_server.py",
+    "ripchamp_secrets.py",
     "ripchamp_tools.ps1",
     "start_ripchamp.bat",
     "stop_ripchamp.bat",
     "favicon.ico",
     "logo.png",
     "logo2.png",
+    "COPYING",
 ]
 PAYLOAD_DIRS = ["static"]
 
@@ -225,7 +227,12 @@ def install_pip_packages(python_exe: str, status_callback=None):
         raise RuntimeError(f"Couldn't install required Python packages:\n{detail}")
 
 
-def install(target_dir: Path, status_callback=None):
+def install(target_dir: Path, status_callback=None) -> str:
+    """Copy the payload and install pip dependencies. Does NOT launch the
+    server -- the caller does that after showing its own success message,
+    so the server (and its --open-setup browser tab) doesn't pop up behind
+    a still-open "Installed!" dialog. Returns the resolved python_exe path,
+    needed to launch the server afterward."""
     # Check everything's present before touching disk -- no partial
     # install left behind if something's missing.
     missing = check_dependencies()
@@ -244,9 +251,13 @@ def install(target_dir: Path, status_callback=None):
 
     python_exe = find_python()
     install_pip_packages(python_exe, status_callback)
+    return python_exe
 
-    # No visible console -- matches how Ensure-QueueServer in
-    # ripchamp_tools.ps1 already launches the server hidden.
+
+def launch_server(python_exe: str, target_dir: Path):
+    """Start the queue server for the first time, opening a browser to
+    /setup. No visible console -- matches how Ensure-QueueServer in
+    ripchamp_tools.ps1 already launches the server hidden."""
     subprocess.Popen(
         [python_exe, "-u", str(target_dir / "ripchamp_queue_server.py"), "--open-setup"],
         cwd=str(target_dir),
@@ -332,7 +343,7 @@ class InstallerApp:
         default_dir = str(Path.home() / "ripchamp")
         pad = {"padx": 16, "pady": 8}
 
-        tk.Label(self.root, text="Choose where to install RIPChamp:").grid(
+        tk.Label(self.root, text="Choose a directory to install RIPChamp:").grid(
             row=0, column=0, columnspan=2, sticky="w", **pad)
 
         self.path_var = tk.StringVar(value=default_dir)
@@ -368,8 +379,9 @@ class InstallerApp:
             self.status_var.set(text)
             self.root.update_idletasks()
 
+        target_dir = Path(target_dir_str)
         try:
-            install(Path(target_dir_str), status_callback=report_status)
+            python_exe = install(target_dir, status_callback=report_status)
         except MissingDependencyError:
             # A dependency vanished between the startup check and clicking
             # Install (rare) -- swap back to the missing-deps view.
@@ -381,7 +393,11 @@ class InstallerApp:
             messagebox.showerror("RIPChamp Setup", str(e))
             return
 
-        messagebox.showinfo("RIPChamp Setup", "Installed! Opening your browser...")
+        # Show the success message and wait for it to be dismissed before
+        # launching the server -- otherwise the browser tab opens behind
+        # this still-open dialog.
+        messagebox.showinfo("RIPChamp Setup", "Installed!")
+        launch_server(python_exe, target_dir)
         self.root.destroy()
 
 

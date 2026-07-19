@@ -278,16 +278,30 @@ def get_watcher_status():
     """Detect whether Invoke-Watch (ripchamp_tools.ps1 -Mode Watch) is
     currently running, and which folder it's watching, by scanning process
     command lines -- mirrors the check Get-WatcherStatus does in
-    ripchamp_tools.ps1 itself, just from the Python side."""
+    ripchamp_tools.ps1 itself, just from the Python side.
+
+    Only matches a watcher running *this* install's own ripchamp_tools.ps1
+    (compared by resolved path, not just filename) -- a plain substring
+    match on "ripchamp_tools.ps1" would also match another RIPChamp install
+    elsewhere on the same machine (e.g. testing a fresh install while an
+    older one's watcher is still running), misreporting its watch folder
+    as this install's own."""
     empty = {"running": False, "watch_path": None, "watch_folder_name": None}
     if psutil is None:
         return empty
+    own_script = str((SCRIPT_DIR / "ripchamp_tools.ps1").resolve())
     for proc in psutil.process_iter(["cmdline"]):
         try:
             cmdline = proc.info["cmdline"] or []
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
-        if not any("ripchamp_tools.ps1" in part for part in cmdline):
+        script_part = next((p for p in cmdline if p.lower().endswith("ripchamp_tools.ps1")), None)
+        if script_part is None:
+            continue
+        try:
+            if str(Path(script_part).resolve()) != own_script:
+                continue
+        except OSError:
             continue
         if "-Mode" not in cmdline:
             continue

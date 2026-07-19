@@ -40,12 +40,14 @@ $payloadFiles = @(
     "ripchamp.py",
     "ripchamp_picker.py",
     "ripchamp_queue_server.py",
+    "ripchamp_secrets.py",
     "ripchamp_tools.ps1",
     "start_ripchamp.bat",
     "stop_ripchamp.bat",
     "favicon.ico",
     "logo.png",
-    "logo2.png"
+    "logo2.png",
+    "COPYING"
 )
 
 $addDataArgs = @()
