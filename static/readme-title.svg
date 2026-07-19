@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 92" width="620" height="92">
+  <rect x="9" y="9" width="580" height="72" rx="10" fill="#8E54EE"/>
+  <rect x="4" y="4" width="580" height="72" rx="10" fill="#15171c" stroke="#262931" stroke-width="1"/>
+  <text x="34" y="53" font-family="'JetBrains Mono', 'Consolas', monospace" font-size="30" letter-spacing="1.5">
+    <tspan fill="#e7e9ee">RIP</tspan><tspan fill="#8E54EE">Champ</tspan><tspan fill="#e7e9ee">(</tspan><tspan fill="#FF0000">Clip</tspan><tspan fill="#e7e9ee">).</tspan><tspan fill="#5865F2">Pipeline</tspan>
+  </text>
+</svg>
