@@ -4,7 +4,22 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// esc() alone doesn't escape quotes (not special in HTML text content) --
+// needed wherever a dynamic value goes inside a "..."-delimited attribute
+// (e.g. the upload URL in an href), so it can't break out of the attribute.
+function escAttr(s) {
+  return esc(s).replace(/"/g, '&quot;');
+}
+
 function keySet(arr) { return new Set(arr.map(String)); }
+
+function truncateName(name, max = 40) {
+  if (name.length <= max) return name;
+  const keep = max - 3;
+  const front = Math.ceil(keep / 2);
+  const back = Math.floor(keep / 2);
+  return name.slice(0, front) + '...' + name.slice(-back);
+}
 
 function colorizeStage(stage) {
   return esc(stage)
@@ -33,9 +48,15 @@ async function refresh() {
 
   const isNew = (key, prevKeys) => !firstRefresh && !prevKeys.has(String(key));
 
-  document.getElementById('pendingList').innerHTML = data.pending.length
-    ? data.pending.map(p => `<li data-key="${p.id}" class="${isNew(p.id, seenKeys.pending) ? 'enter' : ''}"><span class="name">${esc(p.name)}</span><a class="button" href="/item/${p.id}">Process</a></li>`).join('')
-    : '<li class="empty">Nothing waiting.</li>';
+  const watcherReady = !!(data.watch_enabled && data.watcher && data.watcher.running);
+  const watcherHint = watcherReady
+    ? 'New videos in your watch folders should show up here automatically.'
+    : 'Setup your watcher settings to automatically have new videos show up here.';
+
+  const clearAllDisabled = data.pending.length === 0 ? ' disabled' : '';
+  document.getElementById('pendingList').innerHTML =
+    data.pending.map(p => `<li data-key="${p.id}" class="${isNew(p.id, seenKeys.pending) ? 'enter' : ''}"><span class="name">${esc(p.name)}</span><a class="button process-btn" href="/item/${p.id}">Process</a></li>`).join('')
+    + `<li class="browse-item"><button class="button browse-btn" id="browseBtn">Browse for a file...</button><span class="name">${esc(watcherHint)}</span><button class="danger" id="clearAllBtn" style="margin-left:auto;"${clearAllDisabled}>Clear All</button></li>`;
 
   // Only touch the DOM (and restart the dots animation) when the active
   // list's ids/stages actually changed -- rebuilding it every 3s poll even
@@ -62,12 +83,40 @@ async function refresh() {
     ? data.history.map(h => {
         const badge = h.destination === 'local' ? '<span class="dest-badge dest-local">Local</span>'
           : h.destination === 'upload' ? '<span class="dest-badge dest-upload">Upload</span>' : '';
-        const openable = h.status === 'done' && h.destination === 'local' && h.output_path;
-        const nameClass = openable ? 'name name-link' : 'name';
-        const nameAttrs = openable ? ` data-finished="${h.finished}" title="Click to open in Explorer"` : '';
-        return `<li data-key="${h.finished}" class="${isNew(h.finished, seenKeys.history) ? 'enter' : ''}"><span class="name-wrap"><span class="${nameClass}"${nameAttrs}>${esc(h.filename)}</span>${badge}</span><span class="status-${h.status}">${h.status}</span></li>`;
+        const isLocal = h.destination === 'local';
+        const isUpload = h.destination === 'upload';
+        const newValue = isLocal ? h.output_filename : (isUpload ? h.title : null);
+        const canOpen = h.status === 'done' && ((isLocal && h.output_path) || (isUpload && h.upload_url));
+        const renamed = newValue && newValue !== h.filename;
+        // Whichever span represents the actual finished output is the one
+        // that should open it -- the new name if renamed, otherwise the
+        // original (e.g. a local crop with the same name, or upload titled
+        // identically to the source file).
+        const openTarget = renamed ? 'new' : 'old';
+
+        function makeSpan(text, isOpenTarget, extraTitleParts) {
+          const clickable = canOpen && isOpenTarget;
+          const titleParts = (extraTitleParts || []).slice();
+          if (clickable) titleParts.push(isUpload ? 'Click to open' : 'Click to open in Explorer');
+          const titleAttr = titleParts.length ? ` title="${esc(titleParts.join(' — '))}"` : '';
+          if (clickable && isUpload) {
+            return `<a class="name name-link" href="${escAttr(h.upload_url)}" target="_blank" rel="noopener"${titleAttr}>${esc(text)}</a>`;
+          }
+          const cls = clickable ? 'name name-link' : 'name';
+          const dataAttr = clickable ? ` data-finished="${h.finished}"` : '';
+          return `<span class="${cls}"${dataAttr}${titleAttr}>${esc(text)}</span>`;
+        }
+
+        const truncated = h.filename.length > 40;
+        const nameHtml = makeSpan(truncateName(h.filename), openTarget === 'old', truncated ? [h.filename] : []);
+        const renameHtml = renamed
+          ? `<span class="rename-arrow">&mdash;&mdash;&#10230;  </span>${makeSpan(newValue, true)}`
+          : '';
+
+        return `<li data-key="${h.finished}" class="${isNew(h.finished, seenKeys.history) ? 'enter' : ''}"><span class="name-wrap">${nameHtml}${renameHtml}${badge}</span><span class="status-${h.status}">${h.status}</span></li>`;
       }).join('')
     : '<li class="empty">No history yet.</li>';
+  document.getElementById('clearHistoryBtn').disabled = data.history.length === 0;
 
   seenKeys = { pending: pendingKeys, active: activeKeys, history: historyKeys };
 
@@ -119,7 +168,7 @@ document.addEventListener('mouseover', (e) => {
   btn._jiggling = true;
   anime({
     targets: btn,
-    rotate: [0, -4, 4, -3, 3, 0],
+    rotate: [0, -2, 2, -1.5, 1.5, 0],
     duration: 400,
     easing: 'easeInOutSine',
     complete: () => { btn._jiggling = false; },
@@ -177,7 +226,7 @@ let browsePulseAnim = null;
 
 setupHintHeader(
   'pendingHeader',
-  'Not seeing a new clip? Check the watcher status or Browse above.',
+  'Not seeing a new clip? Check the watcher status above or Browse below.',
   () => {
     watcherPulseAnim = pulseAttention(document.getElementById('watcherStatus'));
     browsePulseAnim = pulseAttention(document.getElementById('browseBtn'));
@@ -194,14 +243,17 @@ setupHintHeader(
   'We are getting your clip ready. If you change your mind, click Cancel and try again.',
 );
 
-document.getElementById('browseBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('browseBtn');
+document.getElementById('pendingList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('#browseBtn');
+  if (!btn) return;
   btn.disabled = true;
   try {
     const res = await fetch('/browse');
     const data = await res.json();
-    if (data.path) {
-      await fetch('/add?path=' + encodeURIComponent(data.path));
+    if (data.paths && data.paths.length) {
+      for (const path of data.paths) {
+        await fetch('/add?path=' + encodeURIComponent(path));
+      }
       refresh();
     }
   } finally {
@@ -209,15 +261,31 @@ document.getElementById('browseBtn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('setClipDirBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('setClipDirBtn');
+document.getElementById('pendingList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('#clearAllBtn');
+  if (!btn || btn.disabled) return;
   btn.disabled = true;
   try {
-    await fetch('/set-clip-directory');
+    await fetch('/clear-pending');
     refresh();
   } finally {
     btn.disabled = false;
   }
+});
+
+document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('clearHistoryBtn');
+  btn.disabled = true;
+  try {
+    await fetch('/clear-history');
+    refresh();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('setupBtn').addEventListener('click', () => {
+  window.location.href = '/setup';
 });
 
 document.getElementById('activeList').addEventListener('click', async (e) => {
@@ -231,7 +299,10 @@ document.getElementById('activeList').addEventListener('click', async (e) => {
 
 document.getElementById('historyList').addEventListener('click', async (e) => {
   const nameEl = e.target.closest('.name-link');
-  if (!nameEl) return;
+  // The upload case renders an actual <a target="_blank"> that opens the
+  // uploaded link natively -- no data-finished attribute, so it's excluded
+  // here rather than also firing a pointless /history-open-folder call.
+  if (!nameEl || !nameEl.dataset.finished) return;
   await fetch('/history-open-folder?finished=' + encodeURIComponent(nameEl.dataset.finished));
 });
 

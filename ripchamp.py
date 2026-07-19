@@ -10,6 +10,8 @@ How it works:
 Works for any ultrawide ratio (21:9, 32:9, etc.) -- ffmpeg's crop filter
 centers automatically. If the source isn't wide enough to fill 1920px
 after scaling, black bars are padded in instead of cropping/stretching.
+Pass --keep-aspect-ratio to skip the crop/pad entirely and keep the
+source's own aspect ratio (e.g. for portrait/vertical clips).
 
 Trimming:
   Use --start/--end to cut the video down to a time range before
@@ -30,10 +32,10 @@ GPU acceleration:
   and tries each in order, falling back to CPU (libx264) only if none work.
 
 YouTube/Streamable + Discord auto-upload:
-  By default (--video-host youtube), if youtube_client_secret.json is
-  present next to this script (see setup instructions), the finished video
-  is uploaded to YouTube as Unlisted at full quality, and the resulting
-  link is posted to your Discord webhook (which Discord auto-embeds as a
+  By default (--video-host youtube), if a YouTube client secret has been
+  saved via the setup page's YouTube Setup card, the finished video is
+  uploaded to YouTube as Unlisted at full quality, and the resulting link
+  is posted to your Discord webhook (which Discord auto-embeds as a
   playable video) -- no size limit to fight with. The first run opens a
   browser once for you to authorize; after that it's fully automatic.
 
@@ -125,8 +127,17 @@ def get_dimensions(input_path: Path):
     )
     if result.returncode != 0 or not result.stdout.strip():
         return None
-    width_str, height_str = result.stdout.strip().split("x")
-    return int(width_str), int(height_str)
+    # Some files (iPhone recordings with rotation/display-matrix metadata
+    # have been seen to do this) make ffprobe emit a trailing empty field,
+    # e.g. "1920x1080x" instead of "1920x1080" -- filter those out rather
+    # than assuming the split produces exactly two parts.
+    parts = [p for p in result.stdout.strip().split("x") if p]
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
 
 
 def get_duration(path: Path) -> float | None:
@@ -185,7 +196,13 @@ def parse_time(value: str) -> float:
         sys.exit(1)
 
 
-def build_crop_filter(src_w: int, src_h: int) -> str:
+def build_crop_filter(src_w: int, src_h: int, keep_aspect: bool = False) -> str:
+    if keep_aspect:
+        # No crop/pad -- just force even width/height, which libx264 and
+        # most hardware encoders require but odd-dimension sources don't
+        # always have.
+        return "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+
     scaled_w = src_w * 1080 // src_h
     scaled_w -= scaled_w % 2  # keep it even, ffmpeg requires this
 
@@ -363,24 +380,24 @@ def get_youtube_service():
         print("  pip install google-api-python-client google-auth-oauthlib", file=sys.stderr)
         return None
 
-    script_dir = Path(__file__).resolve().parent
-    client_secret_path = script_dir / "youtube_client_secret.json"
-    token_path = script_dir / "youtube_token.json"
-
-    if not client_secret_path.is_file():
+    import ripchamp_secrets
+    client_secret_json = ripchamp_secrets.get_youtube_client_secret()
+    if not client_secret_json:
         return None
+    client_config = json.loads(client_secret_json)
 
     creds = None
-    if token_path.is_file():
-        creds = Credentials.from_authorized_user_file(str(token_path), YOUTUBE_SCOPES)
+    token_json = ripchamp_secrets.get_youtube_token()
+    if token_json:
+        creds = Credentials.from_authorized_user_info(json.loads(token_json), YOUTUBE_SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             print("Opening a browser to authorize YouTube access (one-time)...")
-            flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_path), YOUTUBE_SCOPES)
+            flow = InstalledAppFlow.from_client_config(client_config, YOUTUBE_SCOPES)
             creds = flow.run_local_server(port=0)
-        token_path.write_text(creds.to_json())
+        ripchamp_secrets.set_youtube_token(creds.to_json())
 
     return build("youtube", "v3", credentials=creds)
 
@@ -510,6 +527,8 @@ def main():
     parser.add_argument("output", type=Path, nargs="?", help="Path to the output video (optional)")
     parser.add_argument("--width", type=int, help="Manually specify source width (if ffprobe can't read a corrupted header)")
     parser.add_argument("--height", type=int, help="Manually specify source height (if ffprobe can't read a corrupted header)")
+    parser.add_argument("--keep-aspect-ratio", action="store_true",
+        help="Skip the 1920x1080 (16:9) crop/pad and keep the source's own aspect ratio instead.")
     parser.add_argument("--start", type=str, default=None, help="Trim start point, e.g. '30s', '1:30'.")
     parser.add_argument("--end", type=str, default=None, help="Trim end point, e.g. '1:30'.")
     parser.add_argument(
@@ -554,7 +573,7 @@ def main():
     if args.youtube_auth_only:
         svc = get_youtube_service()
         if not svc:
-            print("YouTube authorization failed -- check youtube_client_secret.json is present.")
+            print("YouTube authorization failed -- check a client secret has been saved via the setup page.")
             sys.exit(1)
         try:
             resp = svc.channels().list(part="snippet", mine=True).execute()
@@ -562,7 +581,7 @@ def main():
             if items:
                 print(f"Authorized as channel: {items[0]['snippet']['title']}")
                 print("If that's the wrong channel: switch your active channel at youtube.com")
-                print("(profile picture -> Switch account), delete youtube_token.json, and re-run this.")
+                print("(profile picture -> Switch account), reset the token via the setup page, and re-run this.")
             else:
                 print("Authorized, but couldn't identify the channel name.")
         except Exception as e:
@@ -625,7 +644,7 @@ def main():
         src_w, src_h = dims
         print(f"Source resolution: {src_w}x{src_h}")
 
-    crop_filter = build_crop_filter(src_w, src_h)
+    crop_filter = build_crop_filter(src_w, src_h, keep_aspect=args.keep_aspect_ratio)
 
     # --- HDR tonemap ---
     if args.tonemap == "none":
@@ -694,7 +713,8 @@ def main():
     title = args.youtube_title or output_path.stem
 
     if args.video_host == "youtube":
-        youtube_configured = (Path(__file__).resolve().parent / "youtube_client_secret.json").is_file()
+        import ripchamp_secrets
+        youtube_configured = ripchamp_secrets.get_youtube_client_secret() is not None
         if not args.no_youtube and youtube_configured:
             video_id = upload_to_youtube(output_path, title, args.youtube_privacy)
             if video_id:

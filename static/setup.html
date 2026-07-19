@@ -115,6 +115,30 @@
 </div>
 
 <div class="card">
+  <h2>RIPChamp Integrations</h2>
+  <div class="row" style="gap: 12px; align-items: stretch;">
+    <button type="button" class="integration-tile" id="discordIntegrationTile" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text); font-family: inherit;">
+      <img src="/static/discord-icon.gif" alt="" width="32" height="32">
+      <span style="font-weight: 600;">Discord</span>
+      <span style="font-size: 12px; color: var(--text-dim);">Click to setup</span>
+      <span id="discordIntegrationStatus" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;"></span>
+    </button>
+    <button type="button" class="integration-tile" id="youtubeIntegrationTile" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text); font-family: inherit;">
+      <img src="/static/youtube-icon.gif" alt="" width="32" height="32">
+      <span style="font-weight: 600;">YouTube</span>
+      <span style="font-size: 12px; color: var(--text-dim);">Click to setup</span>
+      <span id="youtubeIntegrationStatus" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;"></span>
+    </button>
+    <button type="button" class="integration-tile" id="streamableIntegrationTile" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text); font-family: inherit;">
+      <img src="/static/streamable-icon.gif" alt="" width="32" height="32">
+      <span style="font-weight: 600;">Streamable</span>
+      <span style="font-size: 12px; color: var(--text-dim);">Click to setup</span>
+      <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; color: #3ba55d; background: rgba(59, 165, 93, 0.15);">Complete</span>
+    </button>
+  </div>
+</div>
+
+<div class="card" id="discordIntegrationCard" style="display: none;">
   <h2><img src="/static/discord-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> Discord Integration</h2>
   <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 8px;">
     RIPChamp posts finished clips to a Discord channel using a webhook. To create one:
@@ -135,12 +159,45 @@
   <ul id="webhookList" style="list-style: none; padding: 0; margin: 16px 0 0;"></ul>
 </div>
 
-<div class="card">
-  <h2>Coming soon</h2>
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0;">
-    RIPChamp is installed. This page will walk through configuring your
-    watch folder, Discord/YouTube/Streamable, and checking dependencies
-    like ffmpeg. For now, head to the <a href="/" style="color: var(--accent);">clip queue</a> to get started.
+<div class="card" id="youtubeSetupCard" style="display: none;">
+  <h2><img src="/static/youtube-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> YouTube Setup</h2>
+  <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 8px;">
+    RIPChamp can upload finished clips straight to YouTube as Unlisted videos. To set that up:
+  </p>
+  <ul style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 16px; padding-left: 20px; list-style: disc;">
+    <li style="display: list-item; padding: 0; border: none; background: none; margin-bottom: 6px;">Go to Google Cloud Console and <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener" style="color: var(--accent);">create a project</a> (or select an existing one)</li>
+    <li style="display: list-item; padding: 0; border: none; background: none; margin-bottom: 6px;">Go to the <a href="https://console.cloud.google.com/apis/library" target="_blank" rel="noopener" style="color: var(--accent);">Library</a> and enable <strong>YouTube Data API v3</strong></li>
+    <li style="display: list-item; padding: 0; border: none; background: none; margin-bottom: 6px;">Go to <a href="https://console.cloud.google.com/auth/overview" target="_blank" rel="noopener" style="color: var(--accent);">OAuth consent screen</a> -- if Google Auth Platform hasn't been configured yet, follow the prompts to set it up (app name, support email, etc.)</li>
+    <li style="display: list-item; padding: 0; border: none; background: none; margin-bottom: 6px;">Go to OAuth consent screen &rarr; <a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener" style="color: var(--accent);">Audience</a> and click <strong>Publish App</strong> (otherwise your login expires and needs redoing every 7 days)</li>
+    <li style="display: list-item; padding: 0; border: none; background: none; margin-bottom: 6px;">Go to <strong>APIs &amp; Services &rarr; Credentials &rarr; Create Credentials &rarr; OAuth client ID</strong>, choose <strong>Desktop app</strong></li>
+    <li style="display: list-item; padding: 0; border: none; background: none;">Click <strong>Download JSON</strong> on the new client ID, then browse for that downloaded file below</li>
+  </ul>
+
+  <div class="row">
+    <button class="button" id="browseYoutubeSecretBtn" type="button">Browse for client_secret.json...</button>
+    <button class="danger" id="resetYoutubeSecretBtn" type="button">Reset Client Secret</button>
+  </div>
+  <div id="youtubeSecretError" style="color: var(--danger); font-size: 13px; margin-top: 8px; display: none;"></div>
+
+  <div class="row" style="margin-top: 16px;">
+    <span id="youtubeClientSecretStatus" style="font-size: 13px; color: var(--text-dim);"></span>
+  </div>
+  <div class="row">
+    <span id="youtubeTokenStatus" style="font-size: 13px; color: var(--text-dim);"></span>
+  </div>
+  <div class="row">
+    <button class="button" id="authorizeYoutubeBtn" type="button">Authorize with Google</button>
+    <button class="danger" id="resetYoutubeTokenBtn" type="button">Reset Token</button>
+  </div>
+  <div id="youtubeAuthStatus" style="font-size: 13px; margin-top: 8px;"></div>
+</div>
+
+<div class="card" id="streamableSetupCard" style="display: none;">
+  <h2><img src="/static/streamable-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> Streamable Setup</h2>
+  <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0;">
+    Streamable doesn't need any setup -- there's no account or credentials to configure. Uploads
+    are capped at 250MB; if a finished clip is larger than that, RIPChamp automatically compresses
+    a copy down to fit before uploading, so it always just works.
   </p>
 </div>
 
@@ -148,6 +205,7 @@
   <div style="display: flex; justify-content: center; gap: 12px;">
     <button class="danger" id="cancelSetupBtn">Cancel</button>
     <button class="primary" id="saveSettingsBtn">Save Settings</button>
+    <button class="primary" id="saveSettingsCloseBtn">Save Settings + Close</button>
   </div>
   <span id="saveStatus" style="color: var(--text-dim); font-size: 13px;"></span>
 </div>
@@ -180,6 +238,77 @@ document.getElementById('whoAskedBtn').addEventListener('click', () => {
     begin: () => { card.style.overflow = 'hidden'; },
     complete: () => { card.style.display = 'none'; },
   });
+});
+
+function setIntegrationStatusBadge(el, complete) {
+  el.textContent = complete ? 'Complete' : 'Not set up';
+  el.style.color = complete ? '#3ba55d' : 'var(--danger)';
+  el.style.background = complete ? 'rgba(59, 165, 93, 0.15)' : 'rgba(229, 72, 77, 0.15)';
+}
+
+function slideCardOpen(card) {
+  card.style.display = 'block';
+  if (typeof anime === 'undefined') { return; }
+  const targetHeight = card.scrollHeight;
+  card.style.height = '0px';
+  card.style.opacity = '0';
+  card.style.overflow = 'hidden';
+  anime({
+    targets: card,
+    opacity: [0, 1],
+    height: [0, targetHeight],
+    duration: 350,
+    easing: 'easeOutQuad',
+    complete: () => { card.style.height = ''; card.style.overflow = ''; },
+  });
+}
+
+function slideCardClosed(card) {
+  if (typeof anime === 'undefined') {
+    card.style.display = 'none';
+    return;
+  }
+  const currentHeight = card.offsetHeight;
+  anime({
+    targets: card,
+    opacity: [1, 0],
+    height: [currentHeight, 0],
+    duration: 300,
+    easing: 'easeInQuad',
+    begin: () => { card.style.overflow = 'hidden'; },
+    complete: () => { card.style.display = 'none'; card.style.height = ''; card.style.overflow = ''; },
+  });
+}
+
+function setActiveTile(tile, active) {
+  tile.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+}
+
+const integrationPanels = [
+  {tile: document.getElementById('discordIntegrationTile'), card: document.getElementById('discordIntegrationCard')},
+  {tile: document.getElementById('youtubeIntegrationTile'), card: document.getElementById('youtubeSetupCard')},
+  {tile: document.getElementById('streamableIntegrationTile'), card: document.getElementById('streamableSetupCard')},
+];
+
+function toggleIntegrationPanel(clicked) {
+  const isOpen = clicked.card.style.display !== 'none';
+  integrationPanels.forEach(panel => {
+    if (panel !== clicked && panel.card.style.display !== 'none') {
+      slideCardClosed(panel.card);
+      setActiveTile(panel.tile, false);
+    }
+  });
+  if (isOpen) {
+    slideCardClosed(clicked.card);
+    setActiveTile(clicked.tile, false);
+  } else {
+    slideCardOpen(clicked.card);
+    setActiveTile(clicked.tile, true);
+  }
+}
+
+integrationPanels.forEach(panel => {
+  panel.tile.addEventListener('click', () => toggleIntegrationPanel(panel));
 });
 
 // Letter-by-letter reveal (same technique as the queue page's "?" hints,
@@ -341,29 +470,45 @@ browseClipFolderBtn.addEventListener('click', async () => {
 });
 
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+const saveSettingsCloseBtn = document.getElementById('saveSettingsCloseBtn');
+const cancelSetupBtn = document.getElementById('cancelSetupBtn');
 const saveStatus = document.getElementById('saveStatus');
 
-saveSettingsBtn.addEventListener('click', async () => {
+async function saveSetupSettings(triggerBtn) {
   const startAutomatically = document.querySelector('input[name=runAtStartup]:checked').value;
   const watchEnabled = document.querySelector('input[name=watchEnabled]:checked').value;
   const clipFolderEnabled = document.querySelector('input[name=clipFolderEnabled]:checked').value;
 
-  saveSettingsBtn.disabled = true;
+  triggerBtn.disabled = true;
   saveStatus.textContent = startAutomatically === 'yes'
     ? 'Waiting for administrator approval...'
     : 'Saving...';
 
+  let ok = false;
   try {
     const res = await fetch(`/save-setup-settings?startAtStartup=${startAutomatically}&watchEnabled=${watchEnabled}&clipFolderEnabled=${clipFolderEnabled}`);
     const data = await res.json();
-    saveStatus.textContent = data.ok
+    ok = !!data.ok;
+    saveStatus.textContent = ok
       ? 'Saved.'
       : `Couldn't save: ${data.error || 'unknown error'}`;
   } catch (e) {
     saveStatus.textContent = "Couldn't reach the server to save.";
   } finally {
-    saveSettingsBtn.disabled = false;
+    triggerBtn.disabled = false;
   }
+  return ok;
+}
+
+saveSettingsBtn.addEventListener('click', () => saveSetupSettings(saveSettingsBtn));
+
+saveSettingsCloseBtn.addEventListener('click', async () => {
+  const ok = await saveSetupSettings(saveSettingsCloseBtn);
+  if (ok) { window.location.href = '/'; }
+});
+
+cancelSetupBtn.addEventListener('click', () => {
+  window.location.href = '/';
 });
 
 const webhookNameInput = document.getElementById('webhookNameInput');
@@ -404,9 +549,12 @@ async function loadWebhooks() {
   try {
     const res = await fetch('/discord-webhooks');
     const data = await res.json();
-    renderWebhookList(data.webhooks || []);
+    const webhooks = data.webhooks || [];
+    renderWebhookList(webhooks);
+    setIntegrationStatusBadge(document.getElementById('discordIntegrationStatus'), webhooks.length > 0);
   } catch (e) {
     renderWebhookList([]);
+    setIntegrationStatusBadge(document.getElementById('discordIntegrationStatus'), false);
   }
 }
 loadWebhooks();
@@ -446,6 +594,108 @@ async function removeWebhook(name) {
   await fetch(`/delete-discord-webhook?name=${encodeURIComponent(name)}`);
   loadWebhooks();
 }
+
+const browseYoutubeSecretBtn = document.getElementById('browseYoutubeSecretBtn');
+const resetYoutubeSecretBtn = document.getElementById('resetYoutubeSecretBtn');
+const youtubeSecretError = document.getElementById('youtubeSecretError');
+const youtubeClientSecretStatus = document.getElementById('youtubeClientSecretStatus');
+const youtubeTokenStatus = document.getElementById('youtubeTokenStatus');
+const authorizeYoutubeBtn = document.getElementById('authorizeYoutubeBtn');
+const resetYoutubeTokenBtn = document.getElementById('resetYoutubeTokenBtn');
+const youtubeAuthStatus = document.getElementById('youtubeAuthStatus');
+
+function fmtAddedDate(iso) {
+  return iso ? new Date(iso).toLocaleDateString() : null;
+}
+
+async function loadYoutubeStatus() {
+  try {
+    const res = await fetch('/youtube-status');
+    const data = await res.json();
+    const secretDate = fmtAddedDate(data.clientSecretAdded);
+    const tokenDate = fmtAddedDate(data.tokenAdded);
+    youtubeClientSecretStatus.textContent = secretDate
+      ? `Client secret saved ${secretDate}`
+      : 'No client secret saved yet.';
+    youtubeTokenStatus.textContent = tokenDate
+      ? `Authorized ${tokenDate}`
+      : 'Not authorized yet.';
+    authorizeYoutubeBtn.disabled = !secretDate;
+    setIntegrationStatusBadge(document.getElementById('youtubeIntegrationStatus'), !!secretDate && !!tokenDate);
+  } catch (e) {
+    youtubeClientSecretStatus.textContent = '';
+    youtubeTokenStatus.textContent = '';
+    setIntegrationStatusBadge(document.getElementById('youtubeIntegrationStatus'), false);
+  }
+}
+loadYoutubeStatus();
+
+browseYoutubeSecretBtn.addEventListener('click', async () => {
+  youtubeSecretError.style.display = 'none';
+  browseYoutubeSecretBtn.disabled = true;
+  try {
+    const res = await fetch('/browse-youtube-client-secret');
+    const data = await res.json();
+    if (data.ok) {
+      loadYoutubeStatus();
+    } else if (data.error) {
+      youtubeSecretError.textContent = data.error;
+      youtubeSecretError.style.display = 'block';
+    }
+    // data.error === null means the user just canceled the file dialog -- not an error.
+  } catch (e) {
+    youtubeSecretError.textContent = "Couldn't reach the server.";
+    youtubeSecretError.style.display = 'block';
+  } finally {
+    browseYoutubeSecretBtn.disabled = false;
+  }
+});
+
+resetYoutubeSecretBtn.addEventListener('click', async () => {
+  resetYoutubeSecretBtn.disabled = true;
+  try {
+    await fetch('/reset-youtube-client-secret');
+    loadYoutubeStatus();
+  } finally {
+    resetYoutubeSecretBtn.disabled = false;
+  }
+});
+
+resetYoutubeTokenBtn.addEventListener('click', async () => {
+  resetYoutubeTokenBtn.disabled = true;
+  try {
+    await fetch('/reset-youtube-token');
+    youtubeAuthStatus.textContent = '';
+    loadYoutubeStatus();
+  } finally {
+    resetYoutubeTokenBtn.disabled = false;
+  }
+});
+
+authorizeYoutubeBtn.addEventListener('click', async () => {
+  authorizeYoutubeBtn.disabled = true;
+  youtubeAuthStatus.style.color = 'var(--text-dim)';
+  youtubeAuthStatus.textContent = 'Opening a browser window to authorize -- approve access there, then come back here...';
+  try {
+    const res = await fetch('/authorize-youtube', {method: 'POST'});
+    const data = await res.json();
+    if (data.ok) {
+      youtubeAuthStatus.style.color = 'var(--text)';
+      youtubeAuthStatus.textContent = data.channel
+        ? `Authorized as channel: ${data.channel}`
+        : 'Authorized, but could not identify the channel name.';
+      loadYoutubeStatus();
+    } else {
+      youtubeAuthStatus.style.color = 'var(--danger)';
+      youtubeAuthStatus.textContent = data.error || 'Authorization failed.';
+    }
+  } catch (e) {
+    youtubeAuthStatus.style.color = 'var(--danger)';
+    youtubeAuthStatus.textContent = "Couldn't reach the server to authorize.";
+  } finally {
+    authorizeYoutubeBtn.disabled = false;
+  }
+});
 </script>
 </body>
 </html>

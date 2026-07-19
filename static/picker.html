@@ -63,11 +63,17 @@
     <label><input type="radio" name="type" value="audio"> Audio only (extract mp3, saved locally)</label>
   </div>
 
+  <div class="row" id="aspectRow">
+    <label><input type="radio" name="aspect" value="crop" checked> Crop 16:9</label>
+    <label><input type="radio" name="aspect" value="original"> Keep original aspect ratio</label>
+  </div>
+
+  <div class="row">
+    <label for="titleInput" id="titleLabel" style="min-width:40px">Title</label>
+    <input type="text" id="titleInput" placeholder="blank for default">
+  </div>
+
   <div id="videoOptions">
-    <div class="row">
-      <label for="titleInput" style="min-width:40px">Title</label>
-      <input type="text" id="titleInput" placeholder="blank for default">
-    </div>
     <div class="row">
       <label><input type="radio" name="dest" value="upload" checked> Upload</label>
       <label><input type="radio" name="dest" value="local"> Local only (just crop, don't upload)</label>

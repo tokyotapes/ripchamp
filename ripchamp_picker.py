@@ -216,10 +216,16 @@ def build_result(data: dict) -> dict:
     if end is not None and end < duration - 0.05:
         output["end"] = round(end, 2)
 
-    if output["type"] == "video":
+    if output["type"] == "audio":
+        file_name = (data.get("fileName") or "").strip()
+        if file_name:
+            output["fileName"] = file_name
+    elif output["type"] == "video":
         title = (data.get("title") or "").strip()
         if title:
             output["title"] = title
+        if data.get("aspect") == "original":
+            output["aspect"] = "original"
         output["destination"] = data.get("destination", "upload")
         if output["destination"] == "upload":
             output["videoHost"] = data.get("videoHost", "youtube")
@@ -233,6 +239,12 @@ def build_result(data: dict) -> dict:
     return output
 
 
+def sanitize_filename(name: str) -> str:
+    """Strip characters Windows won't allow in a filename, so a user-typed
+    audio filename can't produce an invalid path."""
+    return re.sub(r'[<>:"/\\|?*]', "", name).strip().strip(".")
+
+
 def build_ripchamp_args(input_path: str, result: dict, clip_dir: str | None = None) -> list:
     """Build the ripchamp.py argv (excluding the python/script prefix) from
     a build_result() dict. clip_dir, if set, overrides where local
@@ -243,9 +255,14 @@ def build_ripchamp_args(input_path: str, result: dict, clip_dir: str | None = No
     args = [input_path]
 
     if result.get("type") == "audio":
-        if clip_dir:
+        out_dir = Path(clip_dir) if clip_dir else Path(input_path).parent
+        sanitized = sanitize_filename(result.get("fileName") or "")
+        if sanitized:
+            out_name = Path(sanitized).with_suffix(".mp3").name
+            args.append(str(out_dir / out_name))
+        elif clip_dir:
             out_name = Path(input_path).with_suffix(".mp3").name
-            args.append(str(Path(clip_dir) / out_name))
+            args.append(str(out_dir / out_name))
     elif result.get("destination") == "local" and clip_dir:
         out_name = f"{Path(input_path).stem}_1080p.mp4"
         args.append(str(Path(clip_dir) / out_name))
@@ -261,6 +278,9 @@ def build_ripchamp_args(input_path: str, result: dict, clip_dir: str | None = No
 
     if result.get("title"):
         args += ["--youtube-title", result["title"]]
+
+    if result.get("aspect") == "original":
+        args += ["--keep-aspect-ratio"]
 
     if result.get("destination") == "local":
         args += ["--no-youtube", "--no-discord"]

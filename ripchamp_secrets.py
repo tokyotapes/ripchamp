@@ -3,7 +3,7 @@
 ripchamp_secrets.py
 
 Encrypted-at-rest storage for sensitive values RIPChamp needs to hang onto
-long-term: Discord webhook URLs today, YouTube client secret/token later.
+long-term: Discord webhook URLs and the YouTube client secret/OAuth token.
 
 Encrypted with Windows DPAPI (CryptProtectData/CryptUnprotectData via
 ctypes -- no extra dependency needed), scoped to the current Windows user
@@ -80,6 +80,15 @@ def _save_all(data: dict):
     SECRETS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def _raw_value_and_added(entry) -> tuple:
+    """Entries used to be stored as a bare base64 string before the "added"
+    date field existed -- accept both shapes so pre-existing entries saved
+    under the old format don't silently go unreadable."""
+    if isinstance(entry, str):
+        return entry, None
+    return entry["value"], entry.get("added")
+
+
 def _get_category(category: str) -> dict[str, str]:
     """Decrypted {name: value} for a category, skipping any entry that
     fails to decrypt (e.g. the file was copied from another machine or
@@ -88,7 +97,8 @@ def _get_category(category: str) -> dict[str, str]:
     out = {}
     for name, entry in raw.items():
         try:
-            out[name] = _decrypt(base64.b64decode(entry["value"])).decode("utf-8")
+            encoded, _ = _raw_value_and_added(entry)
+            out[name] = _decrypt(base64.b64decode(encoded)).decode("utf-8")
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return out
@@ -101,17 +111,20 @@ def _get_category_with_added(category: str) -> dict[str, dict]:
     out = {}
     for name, entry in raw.items():
         try:
-            value = _decrypt(base64.b64decode(entry["value"])).decode("utf-8")
+            encoded, added = _raw_value_and_added(entry)
+            value = _decrypt(base64.b64decode(encoded)).decode("utf-8")
         except (OSError, ValueError, KeyError, TypeError):
             continue
-        out[name] = {"value": value, "added": entry.get("added")}
+        out[name] = {"value": value, "added": added}
     return out
 
 
 def _set_secret(category: str, name: str, value: str):
     data = _load_all()
     bucket = data.setdefault(category, {})
-    added = bucket.get(name, {}).get("added") or datetime.now(timezone.utc).isoformat()
+    existing = bucket.get(name)
+    _, added = _raw_value_and_added(existing) if existing is not None else (None, None)
+    added = added or datetime.now(timezone.utc).isoformat()
     bucket[name] = {
         "value": base64.b64encode(_encrypt(value.encode("utf-8"))).decode("ascii"),
         "added": added,
@@ -145,3 +158,46 @@ def set_discord_webhook(name: str, url: str):
 
 def delete_discord_webhook(name: str):
     _delete_secret("discord_webhooks", name)
+
+
+# --- YouTube ---
+# Uses the same category/name bucket as Discord webhooks, just with a
+# single fixed category ("youtube") and two fixed entry names, since
+# there's only ever one client secret and one token at a time (unlike
+# webhooks, which are per-channel).
+
+def get_youtube_client_secret() -> str | None:
+    """Raw contents of the downloaded client_secret JSON, decrypted."""
+    return _get_category("youtube").get("client_secret")
+
+
+def set_youtube_client_secret(json_text: str):
+    _set_secret("youtube", "client_secret", json_text)
+
+
+def delete_youtube_client_secret():
+    _delete_secret("youtube", "client_secret")
+
+
+def get_youtube_token() -> str | None:
+    """Raw contents of the OAuth token JSON (creds.to_json()), decrypted."""
+    return _get_category("youtube").get("token")
+
+
+def set_youtube_token(json_text: str):
+    _set_secret("youtube", "token", json_text)
+
+
+def delete_youtube_token():
+    _delete_secret("youtube", "token")
+
+
+def get_youtube_status() -> dict:
+    """{"client_secret_added": ISO date or None, "token_added": ISO date or
+    None} -- for the setup page to show what's configured without exposing
+    the actual secret contents."""
+    entries = _get_category_with_added("youtube")
+    return {
+        "client_secret_added": entries.get("client_secret", {}).get("added"),
+        "token_added": entries.get("token", {}).get("added"),
+    }

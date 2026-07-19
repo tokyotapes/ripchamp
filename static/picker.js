@@ -10,11 +10,13 @@ const playOverlay = document.getElementById('playOverlay');
 const volumeSlider = document.getElementById('volumeSlider');
 const volumeIcon = document.getElementById('volumeIcon');
 const videoOptions = document.getElementById('videoOptions');
+const aspectRow = document.getElementById('aspectRow');
 const hostRow = document.getElementById('hostRow');
 const discordPostRow = document.getElementById('discordPostRow');
 const channelRow = document.getElementById('channelRow');
 const channelSelect = document.getElementById('channelSelect');
 const titleInput = document.getElementById('titleInput');
+const titleLabel = document.getElementById('titleLabel');
 const openFileBtn = document.getElementById('openFileBtn');
 const openFolderBtn = document.getElementById('openFolderBtn');
 
@@ -49,6 +51,14 @@ function updatePlayhead() {
 function updateVisibility() {
   const type = document.querySelector('input[name=type]:checked').value;
   videoOptions.style.display = (type === 'video') ? 'block' : 'none';
+  aspectRow.style.display = (type === 'video') ? 'flex' : 'none';
+  if (type === 'audio') {
+    titleLabel.textContent = 'File Name';
+    titleInput.placeholder = 'blank for original filename';
+  } else {
+    titleLabel.textContent = 'Title';
+    titleInput.placeholder = 'blank for default';
+  }
   const dest = document.querySelector('input[name=dest]:checked').value;
   hostRow.style.display = (type === 'video' && dest === 'upload') ? 'flex' : 'none';
   const showDiscordPost = type === 'video' && dest === 'upload' && CONFIG.channels.length > 0;
@@ -121,8 +131,11 @@ v.addEventListener('timeupdate', () => {
 document.getElementById('confirmBtn').addEventListener('click', async () => {
   const type = document.querySelector('input[name=type]:checked').value;
   const body = { start: startTime(), end: endTime(), duration: duration, canceled: false, type: type };
-  if (type === 'video') {
+  if (type === 'audio') {
+    body.fileName = titleInput.value.trim();
+  } else if (type === 'video') {
     body.title = titleInput.value.trim();
+    body.aspect = document.querySelector('input[name=aspect]:checked').value;
     body.destination = document.querySelector('input[name=dest]:checked').value;
     if (body.destination === 'upload') {
       body.videoHost = document.querySelector('input[name=videoHost]:checked').value;

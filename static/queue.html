@@ -24,8 +24,7 @@
   </div>
   <div class="browse-col">
     <div class="browse-buttons">
-      <button class="button browse-btn" id="browseBtn">Browse for a file...</button>
-      <button class="button browse-btn" id="setClipDirBtn">Set Clip Directory</button>
+      <button class="button browse-btn" id="setupBtn">Setup</button>
     </div>
     <div class="watcher-status" id="watcherStatus"></div>
     <div class="watcher-status" id="clipDirStatus"></div>
@@ -45,6 +44,9 @@
 <div class="card">
   <h2>Clipped and shipped</h2>
   <ul id="historyList"></ul>
+  <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+    <button class="danger" id="clearHistoryBtn">Clear All</button>
+  </div>
 </div>
 </div>
 

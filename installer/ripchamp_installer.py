@@ -12,7 +12,10 @@ still needs Python and ffmpeg already on the machine. Before copying
 anything, this installer checks for both; if either is missing, it offers
 a one-click "Install via winget" per dependency (falling back to a manual
 download link if winget isn't available or the install fails) -- no
-partial install left behind either way.
+partial install left behind either way. Once Python/ffmpeg are confirmed
+present, it also pip-installs RIPChamp's own Python package dependencies
+(see PIP_PACKAGES) into that Python before launching the server, so the
+end user never has to run pip themselves.
 
 Usage (dev, unfrozen -- run from inside installer/):
     python ripchamp_installer.py
@@ -58,6 +61,13 @@ PAYLOAD_FILES = [
 PAYLOAD_DIRS = ["static"]
 
 PYTHON_CANDIDATES = ["python", "py", "python3"]
+
+# Third-party packages RIPChamp's own code imports (psutil for watcher-status
+# detection in ripchamp_queue_server.py, the two google-* packages for
+# YouTube upload in ripchamp.py) -- installed into whichever Python
+# find_python() resolves, so they're present for the copied app without the
+# user having to run pip themselves.
+PIP_PACKAGES = ["psutil", "google-api-python-client", "google-auth-oauthlib"]
 
 
 @dataclass
@@ -183,7 +193,23 @@ def _copy_with_retry(copy_fn, src, dst, attempts=6, delay=0.5):
     raise RuntimeError(f"Couldn't copy {src} to {dst}: {last_error}") from last_error
 
 
-def install(target_dir: Path):
+def install_pip_packages(python_exe: str, status_callback=None):
+    """Install PIP_PACKAGES into whichever Python find_python() resolved --
+    the same interpreter the copied ripchamp_queue_server.py will run
+    under. Raises RuntimeError with pip's own output on failure, same
+    pattern as _copy_with_retry's failure surfacing."""
+    if status_callback:
+        status_callback("Installing Python packages...")
+    result = subprocess.run(
+        [python_exe, "-m", "pip", "install", "--quiet", *PIP_PACKAGES],
+        capture_output=True, text=True, timeout=300,
+    )
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).strip()[-800:]
+        raise RuntimeError(f"Couldn't install required Python packages:\n{detail}")
+
+
+def install(target_dir: Path, status_callback=None):
     # Check everything's present before touching disk -- no partial
     # install left behind if something's missing.
     missing = check_dependencies()
@@ -201,6 +227,7 @@ def install(target_dir: Path):
         )
 
     python_exe = find_python()
+    install_pip_packages(python_exe, status_callback)
 
     # No visible console -- matches how Ensure-QueueServer in
     # ripchamp_tools.ps1 already launches the server hidden.
@@ -321,8 +348,12 @@ class InstallerApp:
         self.status_var.set("Installing...")
         self.root.update_idletasks()
 
+        def report_status(text):
+            self.status_var.set(text)
+            self.root.update_idletasks()
+
         try:
-            install(Path(target_dir_str))
+            install(Path(target_dir_str), status_callback=report_status)
         except MissingDependencyError:
             # A dependency vanished between the startup check and clicking
             # Install (rare) -- swap back to the missing-deps view.

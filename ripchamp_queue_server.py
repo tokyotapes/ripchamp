@@ -46,7 +46,7 @@ Endpoints:
     GET  /favicon.ico             browser tab icon
     GET  /logo.png                logo shown next to the page title
     GET  /status.json             pending/active/history as JSON (polled by the page)
-    GET  /browse                  pop a native file-open dialog, return the chosen path
+    GET  /browse                  pop a native file-open dialog (multi-select), return the chosen paths
     GET  /set-clip-directory      pop a native folder-choose dialog, save it as the local (non-upload) output dir
     GET  /set-watch-directory     pop a native folder-choose dialog, save it as the watcher's watch folder (setup page)
     GET  /save-setup-settings?startAtStartup=yes|no&watchEnabled=yes|no&clipFolderEnabled=yes|no
@@ -56,7 +56,14 @@ Endpoints:
     GET  /save-discord-webhook?name=<channel>&url=<webhook url>
                                    validate and save a Discord webhook, encrypted at rest (setup page)
     GET  /delete-discord-webhook?name=<channel>  remove a saved Discord webhook
+    GET  /youtube-status          whether a YouTube client secret/token are saved, and when
+    GET  /browse-youtube-client-secret  pop a native file-open dialog, validate and save the chosen client_secret JSON, encrypted
+    POST /authorize-youtube       run the OAuth flow (opens a browser) using the saved client secret, saves the resulting token
+    GET  /reset-youtube-client-secret  remove the saved YouTube client secret
+    GET  /reset-youtube-token     remove the saved YouTube OAuth token (re-authorize / switch channel)
     GET  /add?path=<abs path>     add a file to the queue (called by the watcher, or the Browse button)
+    GET  /clear-pending           drop every pending (not-yet-started) item, recorded as canceled in history
+    GET  /clear-history           wipe the finished-clips history list (doesn't touch files on disk)
     GET  /item/<id>               picker page for one queued item
     GET  /item/<id>/config.json   per-item config picker.js fetches at load (filename, video URL, etc.)
     GET  /item/<id>/video         range-streamed video for that item
@@ -84,9 +91,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ripchamp_picker
 import ripchamp_secrets
 try:
-    from ripchamp import load_discord_webhooks
+    from ripchamp import load_discord_webhooks, get_youtube_service
 except ImportError:
     load_discord_webhooks = None
+    get_youtube_service = None
 try:
     import psutil
 except ImportError:
@@ -190,6 +198,17 @@ def is_valid_discord_webhook_url(url: str) -> bool:
         r"^https://(discord\.com|discordapp\.com)/api/webhooks/\d+/[\w-]+/?$", url))
 
 
+def is_valid_youtube_client_secret(text: str) -> bool:
+    """Loose shape-check on a Google OAuth client secret JSON -- just
+    enough to catch "wrong file" mistakes, not a full schema validation."""
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    inner = parsed.get("installed") or parsed.get("web")
+    return bool(inner and "client_id" in inner and "client_secret" in inner)
+
+
 def run_elevated_tools_mode(mode: str, timeout: float = 90) -> tuple:
     """Run `ripchamp_tools.ps1 -Mode <mode>` elevated, via a UAC prompt.
 
@@ -281,22 +300,25 @@ def get_watcher_status():
     return empty
 
 
-def open_file_dialog():
+def open_file_dialog(title="Choose a video to process", filetypes=None, multiple=False):
     """Pop a native "Open File" dialog on the machine running this server
     (it's always the user's own desktop, never remote) and return the chosen
-    path, or None if canceled. Runs on the request-handling thread, which
-    is fine since ThreadingHTTPServer gives each request its own thread."""
+    path (or list of paths if multiple=True), or None (or [] if multiple)
+    if canceled. Runs on the request-handling thread, which is fine since
+    ThreadingHTTPServer gives each request its own thread."""
     import tkinter as tk
     from tkinter import filedialog
+
+    if filetypes is None:
+        filetypes = [("Video files", "*.mp4 *.mov *.mkv *.avi *.webm"), ("All files", "*.*")]
 
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
     try:
-        path = filedialog.askopenfilename(
-            title="Choose a video to process",
-            filetypes=[("Video files", "*.mp4 *.mov *.mkv *.avi *.webm"), ("All files", "*.*")],
-        )
+        if multiple:
+            return list(filedialog.askopenfilenames(title=title, filetypes=filetypes))
+        path = filedialog.askopenfilename(title=title, filetypes=filetypes)
     finally:
         root.destroy()
     return path or None
@@ -379,12 +401,14 @@ class QueueState:
             return bool(item and item.get("cancel_requested"))
 
     def finish_processing(self, item_id: int, filename: str, status: str, detail: str = "",
-                           destination: str | None = None, output_path: str | None = None):
+                           destination: str | None = None, output_path: str | None = None,
+                           title: str | None = None, upload_url: str | None = None):
         with self.lock:
             self.active.pop(item_id, None)
             self.history.insert(0, {
                 "filename": filename, "status": status, "detail": detail, "finished": time.time(),
                 "destination": destination, "output_path": output_path,
+                "title": title, "upload_url": upload_url,
             })
             self.history = self.history[:HISTORY_LIMIT]
 
@@ -393,9 +417,34 @@ class QueueState:
             self.pending.pop(item_id, None)
             self.history.insert(0, {
                 "filename": filename, "status": status, "detail": "", "finished": time.time(),
-                "destination": None, "output_path": None,
+                "destination": None, "output_path": None, "title": None, "upload_url": None,
             })
             self.history = self.history[:HISTORY_LIMIT]
+
+    def clear_pending(self) -> int:
+        """Drop every pending (not yet started) item at once -- each one
+        recorded in history as "canceled", same as canceling them
+        individually from the picker page. Doesn't touch active/in-progress
+        jobs. Returns how many were cleared."""
+        with self.lock:
+            cleared = list(self.pending.items())
+            self.pending.clear()
+            for _, item in cleared:
+                self.history.insert(0, {
+                    "filename": item["path"].name, "status": "canceled", "detail": "", "finished": time.time(),
+                    "destination": None, "output_path": None, "title": None, "upload_url": None,
+                })
+            self.history = self.history[:HISTORY_LIMIT]
+            return len(cleared)
+
+    def clear_history(self) -> int:
+        """Wipe the finished-clips history list. Doesn't touch pending/active
+        jobs or any files on disk -- just the queue page's own record of what
+        already finished. Returns how many entries were cleared."""
+        with self.lock:
+            count = len(self.history)
+            self.history = []
+            return count
 
     def snapshot(self):
         with self.lock:
@@ -445,7 +494,13 @@ def expected_output_paths(path: Path, result: dict) -> list:
     clip_dir = get_clip_directory()
     if result.get("type") == "audio":
         base_dir = Path(clip_dir) if clip_dir else path.parent
-        return [base_dir / path.with_suffix(".mp3").name]
+        # Mirror build_ripchamp_args' naming exactly -- a custom fileName
+        # (see ripchamp_picker.build_result) changes where the finished
+        # file actually lands, so this has to track that or "open in
+        # Explorer" points at a file that was never created.
+        sanitized = ripchamp_picker.sanitize_filename(result.get("fileName") or "")
+        out_name = Path(sanitized).with_suffix(".mp3").name if sanitized else path.with_suffix(".mp3").name
+        return [base_dir / out_name]
     # A custom clip directory only applies to the "local" (no-upload) branch --
     # uploaded clips still land next to the source until deleted post-upload.
     base_dir = Path(clip_dir) if (clip_dir and result.get("destination") == "local") else path.parent
@@ -485,6 +540,7 @@ def run_and_record(item_id: int, path: Path, result: dict):
         STATE.set_proc(item_id, proc)
 
         tail_lines = []
+        upload_url = None
         for line in proc.stdout:
             line = line.rstrip("\n")
             tail_lines.append(line)
@@ -492,6 +548,14 @@ def run_and_record(item_id: int, path: Path, result: dict):
             stage = _detect_stage(line)
             if stage:
                 STATE.set_stage(item_id, stage)
+            # ripchamp.py prints this exact line right after a successful
+            # YouTube/Streamable upload (upload_to_youtube/upload_to_streamable) --
+            # captured here so the queue page's history list can link straight
+            # to it instead of just showing the local filename (which gets
+            # deleted after a successful upload anyway).
+            m = re.match(r"Uploaded to (?:YouTube|Streamable): (https://\S+)", line)
+            if m:
+                upload_url = m.group(1)
         proc.wait()
 
         destination = "local" if (result.get("type") == "audio" or result.get("destination") == "local") else "upload"
@@ -502,9 +566,13 @@ def run_and_record(item_id: int, path: Path, result: dict):
             STATE.finish_processing(item_id, path.name, "canceled", destination=destination)
         elif proc.returncode == 0:
             output_path = resolve_local_output_path(path, result)
+            # Mirrors ripchamp.py's own default: `args.youtube_title or output_path.stem`,
+            # where output_path there is the cropped "<stem>_1080p.mp4" file.
+            title = (result.get("title") or f"{path.stem}_1080p") if destination == "upload" else None
             STATE.finish_processing(
                 item_id, path.name, "done", destination=destination,
                 output_path=str(output_path) if output_path else None,
+                title=title, upload_url=upload_url,
             )
         else:
             STATE.finish_processing(item_id, path.name, "error", "\n".join(tail_lines), destination=destination)
@@ -601,6 +669,14 @@ class QueueHandler(BaseHTTPRequestHandler):
             # breaking Windows path splitting (bit us once already for the watcher).
             clip_dir_name = Path(clip_dir).name if clip_dir else None
             watch_dir_name = Path(watch_dir).name if watch_dir else None
+            # Compute the finished output's basename here too, same reason --
+            # lets the queue page show "original -> renamed" when the output
+            # filename differs (custom audio filename, "_1080p" suffix, etc.)
+            # without splitting a Windows path in JS.
+            history = [
+                {**h, "output_filename": Path(h["output_path"]).name if h.get("output_path") else None}
+                for h in history
+            ]
             self._send_json({
                 "pending": pending, "active": active, "history": history,
                 "watcher": get_watcher_status(),
@@ -612,7 +688,8 @@ class QueueHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/browse":
-            self._send_json({"path": open_file_dialog()})
+            self._send_json({"paths": open_file_dialog(
+                title="Choose one or more videos to process", multiple=True)})
             return
 
         if parsed.path == "/set-clip-directory":
@@ -681,6 +758,44 @@ class QueueHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True})
             return
 
+        if parsed.path == "/youtube-status":
+            status = ripchamp_secrets.get_youtube_status()
+            self._send_json({
+                "clientSecretAdded": status["client_secret_added"],
+                "tokenAdded": status["token_added"],
+            })
+            return
+
+        if parsed.path == "/browse-youtube-client-secret":
+            chosen = open_file_dialog(
+                title="Choose your downloaded client_secret JSON file",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            )
+            if not chosen:
+                self._send_json({"ok": False, "error": None})
+                return
+            try:
+                text = Path(chosen).read_text(encoding="utf-8")
+            except OSError as e:
+                self._send_json({"ok": False, "error": f"Couldn't read that file: {e}"})
+                return
+            if not is_valid_youtube_client_secret(text):
+                self._send_json({"ok": False, "error": "That doesn't look like a Google OAuth client secret file."})
+                return
+            ripchamp_secrets.set_youtube_client_secret(text)
+            self._send_json({"ok": True})
+            return
+
+        if parsed.path == "/reset-youtube-client-secret":
+            ripchamp_secrets.delete_youtube_client_secret()
+            self._send_json({"ok": True})
+            return
+
+        if parsed.path == "/reset-youtube-token":
+            ripchamp_secrets.delete_youtube_token()
+            self._send_json({"ok": True})
+            return
+
         if parsed.path == "/history-open-folder":
             qs = urllib.parse.parse_qs(parsed.query)
             finished_str = qs.get("finished", [None])[0]
@@ -705,6 +820,16 @@ class QueueHandler(BaseHTTPRequestHandler):
                 return
             STATE.add(Path(path_str))
             self._send_json({"ok": True})
+            return
+
+        if parsed.path == "/clear-pending":
+            cleared = STATE.clear_pending()
+            self._send_json({"ok": True, "cleared": cleared})
+            return
+
+        if parsed.path == "/clear-history":
+            cleared = STATE.clear_history()
+            self._send_json({"ok": True, "cleared": cleared})
             return
 
         if len(parts) == 2 and parts[0] == "item":
@@ -785,6 +910,29 @@ class QueueHandler(BaseHTTPRequestHandler):
             else:
                 STATE.start_processing(item_id)
                 threading.Thread(target=run_and_record, args=(item_id, item["path"], result), daemon=True).start()
+            return
+
+        if parsed.path == "/authorize-youtube":
+            if get_youtube_service is None:
+                self._send_json({"ok": False, "error": "YouTube packages aren't installed on this machine."})
+                return
+            try:
+                svc = get_youtube_service()
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)})
+                return
+            if not svc:
+                self._send_json({"ok": False, "error": "Save a client secret first."})
+                return
+            channel_name = None
+            try:
+                resp = svc.channels().list(part="snippet", mine=True).execute()
+                items = resp.get("items", [])
+                if items:
+                    channel_name = items[0]["snippet"]["title"]
+            except Exception:
+                pass
+            self._send_json({"ok": True, "channel": channel_name})
             return
 
         if len(parts) == 3 and parts[0] == "item" and parts[2] == "cancel-processing":
