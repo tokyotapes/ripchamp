@@ -56,10 +56,10 @@ YouTube/Streamable + Discord auto-upload:
   browser once for you to authorize; after that it's fully automatic.
 
   Pass --video-host streamable to upload to Streamable instead (requires
-  streamable_credentials.txt next to this script, or STREAMABLE_USERNAME /
-  STREAMABLE_PASSWORD env vars). Streamable uploads are capped at
-  --streamable-max-mb (default 250MB); a copy is compressed to fit if the
-  output is larger.
+  a Streamable username/password, saved via the setup page's Streamable
+  Setup card, or STREAMABLE_USERNAME / STREAMABLE_PASSWORD env vars).
+  Streamable uploads are capped at --streamable-max-mb (default 250MB); a
+  copy is compressed to fit if the output is larger.
 
   If the chosen video host isn't configured (or --no-youtube is set),
   falls back to uploading the file directly to Discord via webhook (see
@@ -477,15 +477,22 @@ def upload_to_youtube(path: Path, title: str, privacy: str) -> str | None:
 # --- Streamable ---
 
 def load_streamable_credentials() -> tuple[str, str] | None:
-    """Load a Streamable account's login from streamable_credentials.txt
-    (username=... / password=... on separate lines, next to this script) or
-    STREAMABLE_USERNAME / STREAMABLE_PASSWORD env vars. An account is
-    required -- anonymous uploads are heavily rate-limited and auto-deleted
-    by Streamable after a short time."""
+    """Load a Streamable account's login -- checked in order: STREAMABLE_USERNAME/
+    STREAMABLE_PASSWORD env vars, then the encrypted store (saved via the
+    setup page's Streamable Setup card), then a legacy streamable_credentials.txt
+    next to this script (username=... / password=... on separate lines) for
+    anyone who set that up before the setup page supported this. An account
+    is required -- anonymous uploads are heavily rate-limited and
+    auto-deleted by Streamable after a short time."""
     env_user = os.environ.get("STREAMABLE_USERNAME")
     env_pass = os.environ.get("STREAMABLE_PASSWORD")
     if env_user and env_pass:
         return env_user, env_pass
+
+    import ripchamp_secrets
+    saved = ripchamp_secrets.get_streamable_credentials()
+    if saved:
+        return saved
 
     creds_path = Path(__file__).resolve().parent / "streamable_credentials.txt"
     if not creds_path.is_file():
@@ -767,7 +774,7 @@ def main():
                 if upload_path != output_path and upload_path.exists():
                     upload_path.unlink(missing_ok=True)
         elif not streamable_creds:
-            print("Streamable not configured -- add streamable_credentials.txt next to this script (or STREAMABLE_USERNAME/STREAMABLE_PASSWORD env vars).")
+            print("Streamable not configured -- add your username/password on the setup page's Streamable Setup card (or set STREAMABLE_USERNAME/STREAMABLE_PASSWORD env vars).")
 
     if not uploaded and webhook_url:
         upload_path = output_path

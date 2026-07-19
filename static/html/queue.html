@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <link href="https://fonts.googleapis.com/css2?family=Workbench&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css">
 <link rel="stylesheet" href="/static/queue.css">
 </head>
@@ -41,7 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   </div>
   <div class="browse-col">
     <div class="browse-buttons">
-      <button class="button browse-btn" id="setupBtn">Setup</button>
+      <a class="settings-link" id="setupBtn" href="/setup"><span class="cog-icon">&#9881;</span>Settings</a>
     </div>
     <div class="watcher-status" id="watcherStatus"></div>
     <div class="watcher-status" id="clipDirStatus"></div>
@@ -49,21 +50,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </div>
 
 <div class="card">
-  <h2 id="pendingHeader">Fresh Clips<span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span></h2>
+  <h2 id="pendingHeader">CLIP QUEUE<span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span></h2>
   <ul id="pendingList"></ul>
+  <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+    <button class="danger" id="clearAllBtn">Clear All</button>
+  </div>
 </div>
 
 <div class="card">
-  <h2 id="activeHeader">Let us cook<span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span></h2>
+  <h2 id="activeHeader">PROCESSING<span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span></h2>
   <ul id="activeList"></ul>
 </div>
 
 <div class="card">
-  <h2>Clipped and shipped</h2>
+  <h2>FINISHED CLIPS</h2>
   <ul id="historyList"></ul>
   <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
     <button class="danger" id="clearHistoryBtn">Clear All</button>
   </div>
+</div>
+
+<div class="footer">
+  <span class="footer-text">RIPChamp &copy; 2026&nbsp;&nbsp; &middot;</span>
+  <a href="https://github.com/tokyotapes/ripchamp" target="_blank" rel="noopener"><img src="/footer2.svg" alt="github: repo"></a>
 </div>
 </div>
 

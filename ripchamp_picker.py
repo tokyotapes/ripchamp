@@ -21,9 +21,9 @@ ripchamp_picker.py
 Shared trim/options picker helpers, used by ripchamp_queue_server.py to
 build and serve the picker page for each queued item.
 
-The actual picker page markup/CSS/JS lives in static/picker.html,
-static/picker.css, and static/picker.js as plain static files (served
-via serve_static_file() below) -- this module only builds the per-item
+The actual picker page markup/CSS/JS lives in static/html/picker.html,
+static/css/picker.css, and static/js/picker.js as plain static files
+(served via serve_static_file() below) -- this module only builds the per-item
 config JSON that picker.js fetches at load (see build_picker_config()),
 plus the video-streaming/Explorer-integration/arg-building helpers.
 
@@ -49,7 +49,7 @@ def build_picker_config(
     """Per-item config static/picker.js fetches at load (from
     "<page-path>/config.json", resolved client-side relative to wherever
     the picker page itself is served) to fill in dynamic values --
-    static/picker.html is a plain static file with no server-side
+    static/html/picker.html is a plain static file with no server-side
     templating. queue_url: if set, the page redirects there after
     Confirm/Cancel instead of showing a static "you can close this tab"
     message -- used by ripchamp_queue_server.py to bounce back to the

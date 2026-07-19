@@ -16,11 +16,14 @@
 :: along with this program.  If not, see <http://www.gnu.org/licenses/>.
 setlocal enabledelayedexpansion
 
+set "PORT=8787"
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -Command "try { $p = (Get-Content '%~dp0ripchamp_config.json' -Raw | ConvertFrom-Json).port; if ($p) { $p } else { 8787 } } catch { 8787 }"`) do set "PORT=%%P"
+
 echo Stopping the RIPChamp watcher (if running)...
 schtasks /end /tn "RIPChampWatcher" >nul 2>&1
 
 echo Stopping the queue server (if running)...
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr :8787 ^| findstr LISTENING') do (
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr :%PORT% ^| findstr LISTENING') do (
     taskkill /F /PID %%p >nul 2>&1
 )
 

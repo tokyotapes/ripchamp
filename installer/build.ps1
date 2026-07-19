@@ -44,9 +44,6 @@ $payloadFiles = @(
     "ripchamp_tools.ps1",
     "start_ripchamp.bat",
     "stop_ripchamp.bat",
-    "favicon.ico",
-    "logo.png",
-    "logo2.png",
     "COPYING"
 )
 

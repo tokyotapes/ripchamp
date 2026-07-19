@@ -46,6 +46,7 @@ names from DEPENDENCIES before launching, e.g. (PowerShell):
     .\\dist\\RIPChampInstaller.exe
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -71,14 +72,17 @@ PAYLOAD_FILES = [
     "ripchamp_tools.ps1",
     "start_ripchamp.bat",
     "stop_ripchamp.bat",
-    "favicon.ico",
-    "logo.png",
-    "logo2.png",
     "COPYING",
 ]
 PAYLOAD_DIRS = ["static"]
 
 PYTHON_CANDIDATES = ["python", "py", "python3"]
+
+# Matches ripchamp_queue_server.py's own DEFAULT_PORT -- duplicated here
+# rather than imported to keep the installer's payload-resolution logic
+# (which handles both frozen and dev-mode paths) independent of the app's
+# own module, same reasoning as PIP_PACKAGES above.
+DEFAULT_PORT = 8787
 
 # Third-party packages RIPChamp's own code imports (psutil for watcher-status
 # detection in ripchamp_queue_server.py, the two google-* packages for
@@ -227,12 +231,16 @@ def install_pip_packages(python_exe: str, status_callback=None):
         raise RuntimeError(f"Couldn't install required Python packages:\n{detail}")
 
 
-def install(target_dir: Path, status_callback=None) -> str:
-    """Copy the payload and install pip dependencies. Does NOT launch the
-    server -- the caller does that after showing its own success message,
-    so the server (and its --open-setup browser tab) doesn't pop up behind
-    a still-open "Installed!" dialog. Returns the resolved python_exe path,
-    needed to launch the server afterward."""
+def install(target_dir: Path, port: int, status_callback=None) -> str:
+    """Copy the payload, install pip dependencies, and save the chosen port
+    to ripchamp_config.json so every future launch (scheduled task,
+    start_ripchamp.bat, running the script directly) agrees on it without
+    needing --port passed explicitly every time (see get_port() in
+    ripchamp_queue_server.py). Does NOT launch the server -- the caller
+    does that after showing its own success message, so the server (and
+    its --open-setup browser tab) doesn't pop up behind a still-open
+    "Installed!" dialog. Returns the resolved python_exe path, needed to
+    launch the server afterward."""
     # Check everything's present before touching disk -- no partial
     # install left behind if something's missing.
     missing = check_dependencies()
@@ -249,17 +257,27 @@ def install(target_dir: Path, status_callback=None) -> str:
             resource_path(rel), target_dir / rel,
         )
 
+    config_path = target_dir / "ripchamp_config.json"
+    config = {}
+    if config_path.is_file():
+        try:
+            config = json.loads(config_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            config = {}
+    config["port"] = port
+    config_path.write_text(json.dumps(config, indent=2))
+
     python_exe = find_python()
     install_pip_packages(python_exe, status_callback)
     return python_exe
 
 
-def launch_server(python_exe: str, target_dir: Path):
+def launch_server(python_exe: str, target_dir: Path, port: int):
     """Start the queue server for the first time, opening a browser to
     /setup. No visible console -- matches how Ensure-QueueServer in
     ripchamp_tools.ps1 already launches the server hidden."""
     subprocess.Popen(
-        [python_exe, "-u", str(target_dir / "ripchamp_queue_server.py"), "--open-setup"],
+        [python_exe, "-u", str(target_dir / "ripchamp_queue_server.py"), "--port", str(port), "--open-setup"],
         cwd=str(target_dir),
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
@@ -353,12 +371,19 @@ class InstallerApp:
         tk.Button(self.root, text="Browse...", command=self.browse).grid(
             row=1, column=1, padx=(4, 16), pady=(0, 8))
 
-        self.status_var = tk.StringVar(value="")
-        tk.Label(self.root, textvariable=self.status_var, fg="#555").grid(
+        tk.Label(self.root, text="Port to use for RIPChamp:").grid(
             row=2, column=0, columnspan=2, sticky="w", padx=16)
 
+        self.port_var = tk.StringVar(value=str(DEFAULT_PORT))
+        tk.Entry(self.root, textvariable=self.port_var, width=10).grid(
+            row=3, column=0, sticky="w", padx=(16, 4), pady=(0, 8))
+
+        self.status_var = tk.StringVar(value="")
+        tk.Label(self.root, textvariable=self.status_var, fg="#555").grid(
+            row=4, column=0, columnspan=2, sticky="w", padx=16)
+
         self.install_btn = tk.Button(self.root, text="Install", command=self.on_install, width=14)
-        self.install_btn.grid(row=3, column=0, columnspan=2, pady=16)
+        self.install_btn.grid(row=5, column=0, columnspan=2, pady=16)
 
     def browse(self):
         chosen = filedialog.askdirectory(initialdir=self.path_var.get() or str(Path.home()))
@@ -371,6 +396,15 @@ class InstallerApp:
             messagebox.showerror("RIPChamp Setup", "Choose a directory first.")
             return
 
+        port_str = self.port_var.get().strip()
+        try:
+            port = int(port_str)
+            if not (1 <= port <= 65535):
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("RIPChamp Setup", "Port must be a number between 1 and 65535.")
+            return
+
         self.install_btn.config(state="disabled")
         self.status_var.set("Installing...")
         self.root.update_idletasks()
@@ -381,7 +415,7 @@ class InstallerApp:
 
         target_dir = Path(target_dir_str)
         try:
-            python_exe = install(target_dir, status_callback=report_status)
+            python_exe = install(target_dir, port, status_callback=report_status)
         except MissingDependencyError:
             # A dependency vanished between the startup check and clicking
             # Install (rare) -- swap back to the missing-deps view.
@@ -397,7 +431,7 @@ class InstallerApp:
         # launching the server -- otherwise the browser tab opens behind
         # this still-open dialog.
         messagebox.showinfo("RIPChamp Setup", "Installed!")
-        launch_server(python_exe, target_dir)
+        launch_server(python_exe, target_dir, port)
         self.root.destroy()
 
 
@@ -407,7 +441,7 @@ def main():
         # failure, no GUI. Temporary -- for tracking down a WinError 3 report.
         import traceback
         try:
-            install(Path(sys.argv[2]))
+            install(Path(sys.argv[2]), DEFAULT_PORT)
             print("OK")
         except Exception:
             traceback.print_exc()

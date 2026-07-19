@@ -129,7 +129,7 @@ button {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 button:hover { background: #2c2f38; border-color: #3a3e49; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #dcdcdc; }
 button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 button.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
 button.danger:hover { background: rgba(229, 72, 77, 0.12); }
@@ -143,3 +143,6 @@ input[type=text], select {
   padding: 8px 10px; font-size: 14px; flex: 1;
 }
 input[type=text]:focus, select:focus { outline: none; border-color: var(--accent); }
+.footer { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 24px; }
+.footer-text { font-size: 11px; color: var(--text-dim); font-family: Verdana, Geneva, "DejaVu Sans", sans-serif; }
+.footer img { height: 15px; width: auto; }

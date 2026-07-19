@@ -27,10 +27,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css">
-<link rel="stylesheet" href="/static/queue.css">
 <link rel="stylesheet" href="/static/picker.css">
+<link rel="stylesheet" href="/static/queue.css">
 <style>
-  body { font-family: "JetBrains Mono", monospace; }
+  /* picker.css and queue.css are both linked here -- picker.css supplies
+     form controls (row/label/input/select/button.primary) that queue.css
+     doesn't define at all, while queue.css loads second so its version of
+     any selector both files share (body, .card, h1, h2, .brand, etc.) wins,
+     matching the queue page's look. .brand-left is the one exception:
+     queue.css never sets align-items on it, so picker.css's align-items:
+     center still wins by default regardless of load order, centering the
+     shorter .sub text under the wider title row. Force it back to left. */
+  .brand-left { align-items: flex-start; }
+  /* Same story for .brand-name's font-size -- only picker.css sets it
+     (42px), so it wins outright regardless of load order. Match queue.css's
+     bare h1 rule (46px) instead. */
+  .brand-name { font-size: 46px; }
 </style>
 </head>
 <body>
@@ -41,7 +53,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <img src="/logo2.png" alt="RIPChamp logo" class="logo">
       <h1 class="brand-name"><span class="rip-part">RIP</span><span class="champ-part">Champ</span>(<span class="clip-part">Setup</span>) == <span class="queue-part">true</span><span class="cursor-blink">_</span></h1>
     </div>
-    <div class="sub">First-run setup -- this page is a placeholder for now.</div>
+    <div class="sub">Configure the watcher, local clips, and integrations from one place.</div>
   </div>
 </div>
 
@@ -109,7 +121,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   </div>
   <div class="row" id="watchFolderRow">
     <button class="button" id="browseWatchFolderBtn" type="button">Browse for Folder...</button>
-    <span id="watchFolderLabel" style="display: inline-block; color: var(--text-dim); font-size: 13px; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; background: var(--bg);">No folder selected</span>
+    <span id="watchFolderLabel" style="display: inline-block; color: var(--text-dim); font-size: 13px; font-family: 'JetBrains Mono', monospace; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; background: var(--bg);">No folder selected</span>
   </div>
 
   <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
@@ -123,11 +135,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div class="row">
     <label><input type="radio" id="clipFolderYes" name="clipFolderEnabled" value="yes"> Yes</label>
     <label><input type="radio" name="clipFolderEnabled" value="no" checked> No</label>
-    <span class="hint-wrapper" id="clipFolderNoHint" style="position: relative; top: 1px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
+    <span class="hint-wrapper" id="clipFolderNoHint" style="position: relative; top: 3px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
   </div>
   <div class="row" id="clipFolderRow">
     <button class="button" id="browseClipFolderBtn" type="button">Browse for Folder...</button>
-    <span id="clipFolderLabel" style="display: inline-block; color: var(--text-dim); font-size: 13px; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; background: var(--bg);">No folder selected</span>
+    <span id="clipFolderLabel" style="display: inline-block; color: var(--text-dim); font-size: 13px; font-family: 'JetBrains Mono', monospace; border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; background: var(--bg);">No folder selected</span>
   </div>
 </div>
 
@@ -150,7 +162,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <img src="/static/streamable-icon.gif" alt="" width="32" height="32">
       <span style="font-weight: 600;">Streamable</span>
       <span style="font-size: 12px; color: var(--text-dim);">Click to setup</span>
-      <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; color: #3ba55d; background: rgba(59, 165, 93, 0.15);">Complete</span>
+      <span id="streamableIntegrationStatus" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;"></span>
     </button>
   </div>
 </div>
@@ -211,20 +223,39 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <div class="card" id="streamableSetupCard" style="display: none;">
   <h2><img src="/static/streamable-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> Streamable Setup</h2>
-  <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0;">
-    Streamable doesn't need any setup -- there's no account or credentials to configure. Uploads
-    are capped at 250MB; if a finished clip is larger than that, RIPChamp automatically compresses
-    a copy down to fit before uploading, so it always just works.
+  <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 8px;">
+    Streamable requires an account to upload to -- anonymous uploads are heavily rate-limited and
+    get auto-deleted after a short time. Enter your Streamable username and password below; they're
+    encrypted at rest the same way as your Discord webhooks and YouTube credentials. Uploads are
+    still capped at 250MB -- if a finished clip is larger than that, RIPChamp automatically
+    compresses a copy down to fit before uploading.
   </p>
+
+  <div class="row">
+    <input type="text" id="streamableUsernameInput" placeholder="Streamable username" style="flex: 1; min-width: 140px;">
+    <input type="password" id="streamablePasswordInput" placeholder="Streamable password" style="flex: 1; min-width: 140px;">
+    <button class="button" id="saveStreamableBtn" type="button">Save</button>
+    <button class="danger" id="resetStreamableBtn" type="button">Clear</button>
+  </div>
+  <div id="streamableSaveError" style="color: var(--danger); font-size: 13px; margin-top: 8px; display: none;"></div>
+
+  <div class="row" style="margin-top: 16px;">
+    <span id="streamableStatus" style="font-size: 13px; color: var(--text-dim);"></span>
+  </div>
 </div>
 
 <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 4px;">
   <div style="display: flex; justify-content: center; gap: 12px;">
     <button class="danger" id="cancelSetupBtn">Cancel</button>
-    <button class="primary" id="saveSettingsBtn">Save Settings</button>
-    <button class="primary" id="saveSettingsCloseBtn">Save Settings + Close</button>
+    <button class="primary" id="saveSettingsBtn">Save</button>
+    <button class="primary" id="saveSettingsCloseBtn">Save + Close</button>
   </div>
   <span id="saveStatus" style="color: var(--text-dim); font-size: 13px;"></span>
+</div>
+
+<div class="footer">
+  <span class="footer-text">RIPChamp &copy; 2026&nbsp;&nbsp; &middot;</span>
+  <a href="https://github.com/tokyotapes/ripchamp" target="_blank" rel="noopener"><img src="/footer2.svg" alt="github: repo"></a>
 </div>
 </div>
 
@@ -686,6 +717,71 @@ resetYoutubeTokenBtn.addEventListener('click', async () => {
     loadYoutubeStatus();
   } finally {
     resetYoutubeTokenBtn.disabled = false;
+  }
+});
+
+const streamableUsernameInput = document.getElementById('streamableUsernameInput');
+const streamablePasswordInput = document.getElementById('streamablePasswordInput');
+const saveStreamableBtn = document.getElementById('saveStreamableBtn');
+const resetStreamableBtn = document.getElementById('resetStreamableBtn');
+const streamableSaveError = document.getElementById('streamableSaveError');
+const streamableStatus = document.getElementById('streamableStatus');
+
+async function loadStreamableStatus() {
+  try {
+    const res = await fetch('/streamable-status');
+    const data = await res.json();
+    const addedDate = fmtAddedDate(data.added);
+    streamableStatus.textContent = addedDate
+      ? `Saved ${addedDate} (username: ${data.username})`
+      : 'No credentials saved yet.';
+    setIntegrationStatusBadge(document.getElementById('streamableIntegrationStatus'), !!addedDate);
+  } catch (e) {
+    streamableStatus.textContent = '';
+    setIntegrationStatusBadge(document.getElementById('streamableIntegrationStatus'), false);
+  }
+}
+loadStreamableStatus();
+
+saveStreamableBtn.addEventListener('click', async () => {
+  const username = streamableUsernameInput.value.trim();
+  const password = streamablePasswordInput.value;
+  streamableSaveError.style.display = 'none';
+
+  if (!username || !password) {
+    streamableSaveError.textContent = 'Username and password are both required.';
+    streamableSaveError.style.display = 'block';
+    return;
+  }
+
+  saveStreamableBtn.disabled = true;
+  try {
+    const res = await fetch(`/save-streamable-credentials?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
+    const data = await res.json();
+    if (data.ok) {
+      streamablePasswordInput.value = '';
+      loadStreamableStatus();
+    } else {
+      streamableSaveError.textContent = data.error || "Couldn't save those credentials.";
+      streamableSaveError.style.display = 'block';
+    }
+  } catch (e) {
+    streamableSaveError.textContent = "Couldn't reach the server to save.";
+    streamableSaveError.style.display = 'block';
+  } finally {
+    saveStreamableBtn.disabled = false;
+  }
+});
+
+resetStreamableBtn.addEventListener('click', async () => {
+  resetStreamableBtn.disabled = true;
+  try {
+    await fetch('/reset-streamable-credentials');
+    streamableUsernameInput.value = '';
+    streamablePasswordInput.value = '';
+    loadStreamableStatus();
+  } finally {
+    resetStreamableBtn.disabled = false;
   }
 });
 

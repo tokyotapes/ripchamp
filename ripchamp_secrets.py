@@ -217,3 +217,35 @@ def get_youtube_status() -> dict:
         "client_secret_added": entries.get("client_secret", {}).get("added"),
         "token_added": entries.get("token", {}).get("added"),
     }
+
+
+# --- Streamable ---
+# Same bucket pattern as YouTube: one fixed category, two fixed entry names
+# (username/password), since there's only ever one Streamable account.
+
+def get_streamable_credentials() -> tuple[str, str] | None:
+    """(username, password), decrypted, or None if not saved."""
+    entries = _get_category("streamable")
+    username, password = entries.get("username"), entries.get("password")
+    return (username, password) if username and password else None
+
+
+def set_streamable_credentials(username: str, password: str):
+    _set_secret("streamable", "username", username)
+    _set_secret("streamable", "password", password)
+
+
+def delete_streamable_credentials():
+    _delete_secret("streamable", "username")
+    _delete_secret("streamable", "password")
+
+
+def get_streamable_status() -> dict:
+    """{"added": ISO date or None, "username": saved username or None} --
+    for the setup page to show what's configured without exposing the
+    password."""
+    entries = _get_category_with_added("streamable")
+    return {
+        "added": entries.get("username", {}).get("added"),
+        "username": entries.get("username", {}).get("value"),
+    }

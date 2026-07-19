@@ -71,10 +71,11 @@ async function refresh() {
     ? 'New videos in your watch folders should show up here automatically.'
     : 'Setup your watcher settings to automatically have new videos show up here.';
 
-  const clearAllDisabled = data.pending.length === 0 ? ' disabled' : '';
+  const hintLettersHtml = watcherHint.replace(/\S/g, c => `<span class="letter">${c}</span>`);
   document.getElementById('pendingList').innerHTML =
-    data.pending.map(p => `<li data-key="${p.id}" class="${isNew(p.id, seenKeys.pending) ? 'enter' : ''}"><span class="name">${esc(p.name)}</span><a class="button process-btn" href="/item/${p.id}">Process</a></li>`).join('')
-    + `<li class="browse-item"><button class="button browse-btn" id="browseBtn">Browse for a file...</button><span class="name">${esc(watcherHint)}</span><button class="danger" id="clearAllBtn" style="margin-left:auto;"${clearAllDisabled}>Clear All</button></li>`;
+    data.pending.map(p => `<li data-key="${p.id}" class="${isNew(p.id, seenKeys.pending) ? 'enter' : ''}"><span class="name">${esc(p.name)}</span><span class="item-actions"><a class="button process-btn" href="/item/${p.id}">Process</a><button class="remove-btn" data-id="${p.id}" title="Remove from queue">&times;</button></span></li>`).join('')
+    + `<li class="browse-item"><button class="button browse-btn" id="browseBtn">Add Files...</button><span class="browse-hint-group"><span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters">${hintLettersHtml}</span><span class="hint-cursor cursor-blink">_</span></span></span></li>`;
+  document.getElementById('clearAllBtn').disabled = data.pending.length === 0;
 
   // Only touch the DOM (and restart the dots animation) when the active
   // list's ids/stages actually changed -- rebuilding it every 3s poll even
@@ -180,19 +181,6 @@ document.addEventListener('click', (e) => {
   anime({ targets: btn, scale: [1, 0.94, 1], duration: 220, easing: 'easeOutQuad' });
 });
 
-document.addEventListener('mouseover', (e) => {
-  const btn = e.target.closest('.button, button.button, .cancel-btn');
-  if (!btn || btn.disabled || btn._jiggling || typeof anime === 'undefined') return;
-  btn._jiggling = true;
-  anime({
-    targets: btn,
-    rotate: [0, -2, 2, -1.5, 1.5, 0],
-    duration: 400,
-    easing: 'easeInOutSine',
-    complete: () => { btn._jiggling = false; },
-  });
-});
-
 // "?" heading hints -- letters fade in one by one (adapted from
 // https://tobiasahlin.com/moving-letters/#11, minus its sweeping line),
 // played on hover instead of looping automatically, then a blinking "_"
@@ -280,8 +268,19 @@ document.getElementById('pendingList').addEventListener('click', async (e) => {
 });
 
 document.getElementById('pendingList').addEventListener('click', async (e) => {
-  const btn = e.target.closest('#clearAllBtn');
+  const btn = e.target.closest('.remove-btn');
   if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  try {
+    await fetch(`/item/${btn.dataset.id}/remove`);
+    refresh();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('clearAllBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('clearAllBtn');
   btn.disabled = true;
   try {
     await fetch('/clear-pending');
@@ -289,6 +288,39 @@ document.getElementById('pendingList').addEventListener('click', async (e) => {
   } finally {
     btn.disabled = false;
   }
+});
+
+// The browse-item row (and its hint icon) gets rebuilt every refresh() poll,
+// so listeners are delegated on the stable #pendingList container instead of
+// attached directly -- same reason #browseBtn uses delegation above.
+// mouseover/mouseout (not mouseenter/mouseleave, which don't bubble)
+// with a relatedTarget check keep this from re-triggering while moving
+// between the icon and its text.
+let browseHintTimeline = null;
+
+document.getElementById('pendingList').addEventListener('mouseover', (e) => {
+  const group = e.target.closest('.browse-hint-group');
+  if (!group || group.contains(e.relatedTarget) || typeof anime === 'undefined') return;
+  const lettersEl = group.querySelector('.hint-letters');
+  const cursorEl = group.querySelector('.hint-cursor');
+  if (browseHintTimeline) { browseHintTimeline.pause(); browseHintTimeline = null; }
+  anime.set(lettersEl.querySelectorAll('.letter'), { opacity: 0 });
+  if (cursorEl) cursorEl.style.display = 'none';
+  browseHintTimeline = anime.timeline({
+    easing: 'easeOutExpo',
+    complete: () => { if (cursorEl) cursorEl.style.display = 'inline-block'; },
+  }).add({ targets: lettersEl.querySelectorAll('.letter'), opacity: [0, 1], duration: 400, delay: anime.stagger(18) });
+});
+
+document.getElementById('pendingList').addEventListener('mouseout', (e) => {
+  const group = e.target.closest('.browse-hint-group');
+  if (!group || group.contains(e.relatedTarget)) return;
+  const lettersEl = group.querySelector('.hint-letters');
+  const cursorEl = group.querySelector('.hint-cursor');
+  if (browseHintTimeline) { browseHintTimeline.pause(); browseHintTimeline = null; }
+  if (cursorEl) cursorEl.style.display = 'none';
+  if (typeof anime === 'undefined') return;
+  anime({ targets: lettersEl.querySelectorAll('.letter'), opacity: 0, duration: 200, easing: 'easeOutQuad' });
 });
 
 document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
@@ -300,10 +332,6 @@ document.getElementById('clearHistoryBtn').addEventListener('click', async () =>
   } finally {
     btn.disabled = false;
   }
-});
-
-document.getElementById('setupBtn').addEventListener('click', () => {
-  window.location.href = '/setup';
 });
 
 document.getElementById('activeList').addEventListener('click', async (e) => {

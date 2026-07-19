@@ -21,9 +21,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   --bg-elev: #15171c;
   --border: #262931;
   --text: #e7e9ee;
+  --text-mid: #b9bcc5;
   --text-dim: #8b909c;
-  --accent: #5b8cff;
-  --accent-hover: #729bff;
+  --accent: #5865F2;
+  --accent-hover: #4651c2;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
@@ -83,7 +84,8 @@ h2 {
   box-shadow: 5px 5px 0px -3px #8E54EE;
 }
 ul {
-  list-style: none; padding: 0; margin: 0; font-family: "JetBrains Mono", monospace;
+  list-style: none; padding: 0; margin: 0;
+  font-family: "Manrope", sans-serif; font-optical-sizing: auto; font-weight: 500; font-style: normal; font-size: 14px;
   /* Cap visible rows at 7 (7 * (57px item height + 8px gap) -- using the
      full per-item height+gap rather than 7*57+6*8 since pendingList always
      has a trailing "Browse for a file..." row after the real items, so the
@@ -108,6 +110,7 @@ li {
   display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #1a1c22;
 }
 li:last-child { margin-bottom: 0; }
+#pendingList li { padding: 8px 14px; }
 li.enter { opacity: 0; }
 li.empty { border-style: dashed; color: var(--text-dim); background: transparent; }
 li.browse-item { justify-content: flex-start; position: sticky; bottom: 0; z-index: 1; }
@@ -116,18 +119,28 @@ li.browse-item .name {
   color: var(--text-dim); font-size: 11px; font-style: italic; white-space: nowrap;
 }
 a.button, button.button {
-  background: var(--accent); color: #fff; text-decoration: none; padding: 7px 14px;
-  border: none; border-radius: 8px; font-size: 13px; font-weight: 400; white-space: nowrap;
+  background: var(--accent); color: #dcdcdc; text-decoration: none; padding: 7px 14px;
+  border: none; border-radius: 8px; font-size: 13px; font-weight: 500; white-space: nowrap;
   cursor: pointer; transition: background 0.15s ease; font-family: inherit;
 }
-a.button:hover, button.button:hover { background: var(--accent-hover); }
+a.button:hover, button.button:hover { background: #4970cc; }
 a.process-btn { background: #5865F2; }
-a.process-btn:hover { background: #6a76f5; }
-button.browse-btn { background: #8E54EE; white-space: nowrap; font-size: 11px; padding: 6px 12px; }
-button.browse-btn:hover { background: #9d6bf0; }
+a.process-btn:hover { background: #4651c2; }
+button.browse-btn { background: #5865F2; white-space: nowrap; font-size: 11px; padding: 9px 12px; }
+button.browse-btn:hover { background: #4651c2; }
 button.browse-btn:disabled { opacity: 0.6; cursor: default; }
 .browse-col { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 0; }
-.browse-buttons { display: flex; flex-direction: column; gap: 8px; }
+.browse-buttons {
+  display: flex; flex-direction: column; gap: 8px; align-self: stretch;
+  padding-bottom: 2px; margin-bottom: 2px; border-bottom: 1px solid rgba(142, 84, 238, 0.35);
+}
+.settings-link {
+  display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end;
+  color: #5865F2; text-decoration: none; font-size: 13px; font-weight: 400;
+  cursor: pointer; transition: color 0.15s ease;
+}
+.settings-link:hover { color: #4651c2; }
+.settings-link .cog-icon { font-size: 19px; }
 .watcher-status { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .watcher-status .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .watcher-status .dot.on { background: #4ade80; }
@@ -146,12 +159,20 @@ button.danger {
 }
 button.danger:hover { background: rgba(229, 72, 77, 0.12); }
 button.danger:disabled { opacity: 0.5; cursor: default; }
-.name { overflow-wrap: anywhere; }
+.name { overflow-wrap: anywhere; color: var(--text-mid); }
 .name-wrap { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; min-width: 0; }
 .name-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; color: inherit; }
 .name-link:visited { color: inherit; }
 .name-link:hover { color: var(--text); }
 .rename-arrow { font-size: 15px; font-weight: 700; color: #8E54EE; white-space: nowrap; }
+.item-actions { display: flex; align-items: center; gap: 8px; }
+.remove-btn {
+  background: transparent; border: none; color: var(--text-dim);
+  font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer;
+  padding: 2px 6px; border-radius: 4px; transition: color 0.15s ease;
+}
+.remove-btn:hover { color: #e5484d; }
+.remove-btn:disabled { opacity: 0.5; cursor: default; }
 .dest-badge {
   font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
   text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; flex-shrink: 0;
@@ -164,3 +185,6 @@ button.danger:disabled { opacity: 0.5; cursor: default; }
 .status-processing { color: #facc15; display: flex; align-items: center; gap: 10px; }
 .dots { display: inline-flex; align-items: flex-end; vertical-align: text-bottom; gap: 3px; margin-left: 4px; position: relative; top: -3px; }
 .dots span { width: 4px; height: 4px; border-radius: 50%; background: #facc15; opacity: 0.25; }
+.footer { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 24px; }
+.footer-text { font-size: 11px; color: var(--text-dim); font-family: Verdana, Geneva, "DejaVu Sans", sans-serif; }
+.footer img { height: 15px; width: auto; }

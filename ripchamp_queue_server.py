@@ -28,16 +28,18 @@ process clips whenever you're ready: pick one from the list, scrub/trim/
 set options, hit Confirm, and ripchamp.py runs in the background while
 you move to the next one.
 
-Runs on a fixed port (default 8787) so the bookmark stays valid across
-restarts. Starting a second instance while one is already running on
-that port is a no-op (it just exits) -- safe to call unconditionally
-from Invoke-Watch each time the watcher starts.
+Runs on a fixed port (chosen at install time, default 8787, saved in
+ripchamp_config.json) so the bookmark stays valid across restarts.
+Starting a second instance while one is already running on that port is
+a no-op (it just exits) -- safe to call unconditionally from Invoke-Watch
+each time the watcher starts.
 
-The picker/queue page markup, CSS, and JS live as plain static files
-under static/ (picker.html/css/js, queue.html/css/js) -- edit them
-directly and refresh the browser, no restart needed, since they're
-served fresh from disk on every request. ripchamp_picker.py's Python
-logic is hot-reloaded automatically whenever the file changes on disk
+The picker/queue/setup page markup, CSS, and JS live as plain static
+files under static/, grouped by type (static/html, static/css, static/js,
+static/img) -- edit them directly and refresh the browser, no restart
+needed, since they're served fresh from disk on every request.
+ripchamp_picker.py's Python logic is hot-reloaded automatically whenever
+the file changes on disk
 (see _reload_if_changed()). Changes to this file's own routing/state
 logic still require a restart.
 
@@ -77,6 +79,10 @@ Endpoints:
     POST /authorize-youtube       run the OAuth flow (opens a browser) using the saved client secret, saves the resulting token
     GET  /reset-youtube-client-secret  remove the saved YouTube client secret
     GET  /reset-youtube-token     remove the saved YouTube OAuth token (re-authorize / switch channel)
+    GET  /streamable-status       whether Streamable credentials are saved, and the saved username
+    GET  /save-streamable-credentials?username=<user>&password=<pass>
+                                   validate and save a Streamable login, encrypted at rest (setup page)
+    GET  /reset-streamable-credentials  remove the saved Streamable credentials
     GET  /add?path=<abs path>     add a file to the queue (called by the watcher, or the Browse button)
     GET  /clear-pending           drop every pending (not-yet-started) item, recorded as canceled in history
     GET  /clear-history           wipe the finished-clips history list (doesn't touch files on disk)
@@ -85,6 +91,7 @@ Endpoints:
     GET  /item/<id>/video         range-streamed video for that item
     GET  /item/<id>/open-file     open the source file in its default app
     GET  /item/<id>/open-folder   reveal the source file in Explorer
+    GET  /item/<id>/remove        drop a single pending item from the queue, recorded as canceled in history
     GET  /history-open-folder?finished=<ts>  reveal a finished local (non-upload) job's output file in Explorer
     POST /item/<id>/confirm       picker page's Confirm/Cancel -> processes or drops the item
     POST /item/<id>/cancel-processing  kill an in-progress job and delete anything it created
@@ -136,6 +143,22 @@ def load_config() -> dict:
 
 def save_config(config: dict):
     CONFIG_PATH.write_text(json.dumps(config, indent=2))
+
+
+def get_port() -> int:
+    """The port the queue server should run on -- chosen at install time
+    (see installer/ripchamp_installer.py) and persisted here so every
+    later launch (scheduled task, start_ripchamp.bat, running the script
+    directly) keeps using the same port without needing --port passed
+    explicitly every time. Defaults to DEFAULT_PORT if never set."""
+    value = load_config().get("port")
+    return int(value) if value else DEFAULT_PORT
+
+
+def set_port(port: int):
+    config = load_config()
+    config["port"] = port
+    save_config(config)
 
 
 def get_clip_directory() -> str | None:
@@ -642,51 +665,59 @@ class QueueHandler(BaseHTTPRequestHandler):
         parts = [p for p in parsed.path.split("/") if p]
 
         if parsed.path in ("/", "/index.html"):
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.html")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "html" / "queue.html")
             return
 
         if parsed.path == "/setup":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "setup.html")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "html" / "setup.html")
             return
 
         if parsed.path == "/static/queue.css":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.css")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "css" / "queue.css")
             return
 
         if parsed.path == "/static/queue.js":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "queue.js")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "js" / "queue.js")
             return
 
         if parsed.path == "/static/picker.css":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "picker.css")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "css" / "picker.css")
             return
 
         if parsed.path == "/static/picker.js":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "picker.js")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "js" / "picker.js")
             return
 
         if parsed.path == "/static/youtube-icon.gif":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "youtube-icon.gif")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "youtube-icon.gif")
             return
 
         if parsed.path == "/static/streamable-icon.gif":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "streamable-icon.gif")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "streamable-icon.gif")
             return
 
         if parsed.path == "/static/discord-icon.gif":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "discord-icon.gif")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "discord-icon.gif")
             return
 
         if parsed.path == "/favicon.ico":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, SCRIPT_DIR / "favicon.ico")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "favicon.ico")
             return
 
         if parsed.path == "/logo.png":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, SCRIPT_DIR / "logo.png")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "logo.png")
             return
 
         if parsed.path == "/logo2.png":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, SCRIPT_DIR / "logo2.png")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "logo2.png")
+            return
+
+        if parsed.path == "/footer1.svg":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "footer1.svg")
+            return
+
+        if parsed.path == "/footer2.svg":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "footer2.svg")
             return
 
         if parsed.path == "/status.json":
@@ -826,6 +857,27 @@ class QueueHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True})
             return
 
+        if parsed.path == "/streamable-status":
+            status = ripchamp_secrets.get_streamable_status()
+            self._send_json({"added": status["added"], "username": status["username"]})
+            return
+
+        if parsed.path == "/save-streamable-credentials":
+            qs = urllib.parse.parse_qs(parsed.query)
+            username = (qs.get("username", [None])[0] or "").strip()
+            password = qs.get("password", [None])[0] or ""
+            if not username or not password:
+                self._send_json({"ok": False, "error": "Username and password are both required."})
+                return
+            ripchamp_secrets.set_streamable_credentials(username, password)
+            self._send_json({"ok": True})
+            return
+
+        if parsed.path == "/reset-streamable-credentials":
+            ripchamp_secrets.delete_streamable_credentials()
+            self._send_json({"ok": True})
+            return
+
         if parsed.path == "/history-open-folder":
             qs = urllib.parse.parse_qs(parsed.query)
             finished_str = qs.get("finished", [None])[0]
@@ -868,7 +920,7 @@ class QueueHandler(BaseHTTPRequestHandler):
             if not item:
                 self._not_found()
                 return
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "picker.html")
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "html" / "picker.html")
             return
 
         if len(parts) == 3 and parts[0] == "item" and parts[2] == "config.json":
@@ -916,6 +968,16 @@ class QueueHandler(BaseHTTPRequestHandler):
             _reload_if_changed(ripchamp_picker).reveal_file_in_folder(item["path"])
             self.send_response(204)
             self.end_headers()
+            return
+
+        if len(parts) == 3 and parts[0] == "item" and parts[2] == "remove":
+            item_id = int(parts[1])
+            item = STATE.get(item_id)
+            if not item:
+                self._not_found()
+                return
+            STATE.drop(item_id, item["path"].name, "canceled")
+            self._send_json({"ok": True})
             return
 
         self._not_found()
@@ -991,10 +1053,14 @@ class SingleInstanceServer(ThreadingHTTPServer):
 
 def main():
     parser = argparse.ArgumentParser(description="Persistent bookmarkable queue for ripchamp clips.")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--port", type=int, default=None,
+        help="Port to listen on. Defaults to whatever's saved in ripchamp_config.json (set at install time), or "
+             f"{DEFAULT_PORT} if nothing's saved yet.")
     parser.add_argument("--open-setup", action="store_true",
         help="Open a browser to /setup once listening -- used by the installer for the first-run experience.")
     args = parser.parse_args()
+    if args.port is None:
+        args.port = get_port()
 
     try:
         server = SingleInstanceServer(("127.0.0.1", args.port), QueueHandler)

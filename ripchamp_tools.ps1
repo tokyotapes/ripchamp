@@ -74,7 +74,6 @@ param(
 )
 
 $TaskName = "RIPChampWatcher"
-$QueuePort = 8787
 
 function Get-ConfiguredWatchPath {
     # Set via the setup page's "Browse for Folder..." button (saved to
@@ -86,6 +85,19 @@ function Get-ConfiguredWatchPath {
         if ($config.watch_directory) { return $config.watch_directory }
     } catch { }
     return $null
+}
+
+function Get-ConfiguredPort {
+    # Chosen at install time (installer/ripchamp_installer.py) and saved to
+    # ripchamp_config.json's port key -- mirrors ripchamp_queue_server.py's
+    # own get_port() default so every launch path agrees on the same port.
+    if (Test-Path $ConfigPath) {
+        try {
+            $config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+            if ($config.port) { return $config.port }
+        } catch { }
+    }
+    return 8787
 }
 
 function Ensure-QueueServer {
@@ -119,6 +131,7 @@ if (-not $ScriptDir) {
     $ScriptDir = Split-Path -Parent $PSCommandPath
 }
 $ConfigPath = Join-Path $ScriptDir "ripchamp_config.json"
+$QueuePort = Get-ConfiguredPort
 
 Add-Type @"
 using System;

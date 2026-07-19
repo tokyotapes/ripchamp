@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="logo2.png" width="120" alt="RIPChamp logo">
+  <img src="static/img/logo2.png" width="120" alt="RIPChamp logo">
 </p>
 
 <p align="center">
-  <img src="static/readme-title.svg" alt="RIPChamp(Clip).Pipeline">
+  <img src="static/img/readme-title.svg" alt="RIPChamp(Clip).Pipeline">
 </p>
 
 <p align="center">
@@ -60,8 +60,8 @@ installer, a first-run setup page, and encrypted local storage for all credentia
 ## Requirements
 
 - Windows 10/11
-- Python 3.10 or later *
-- ffmpeg *
+- Python 3.10 or later*
+- ffmpeg*
 - A modern web browser
 
 <sub>* The installer checks for Python and ffmpeg automatically, offering a one-click
