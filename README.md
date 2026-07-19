@@ -24,7 +24,7 @@ installer, a first-run setup page, and encrypted local storage for all credentia
 
 ## Features
 
-<img src="static/img/purpose.jpg" align="right">
+<img src="static/img/purpose.jpg" align="right" width="400px">
 
 - **Folder watcher** — monitors one folder (and its subfolders) for new recordings and
   adds them to the queue automatically; nothing pops up or steals focus while you're
