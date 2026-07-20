@@ -82,7 +82,7 @@ dependencies for you.</sub>
 
 ShadowPlay Patcher by Temm
 
-<sub>Imagine you experience a once-in-a-lifetim clippable moment and can't wait to immortalize it online forever.  Now imagine the horror of finding out ShadowPlay somehow turned it's self off and no one will ever believe what just happened.  I have known this despair SO MANY TIMES.  I tried all the tips and tricks people posted but they never gave a lasting improvement.  Then I found ShadowPlay Patcher and it set me free from worrying about if ShadowPlay was still running.  Run the patch at start up and ShadowPlay is reliable again, hooray!</sub>
+Imagine you experience a once-in-a-lifetim clippable moment and can't wait to immortalize it online forever.  Now imagine the horror of finding out ShadowPlay somehow turned it's self off and no one will ever believe what just happened.  I have known this despair SO MANY TIMES.  I tried all the tips and tricks people posted but they never gave a lasting improvement.  Then I found ShadowPlay Patcher and it set me free from worrying about if ShadowPlay was still running.  Run the patch at start up and ShadowPlay is reliable again, hooray!
 
 <a href="https://github.com/furyzenblade/ShadowPlay_Patcher">Download</a>
 
