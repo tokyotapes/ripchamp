@@ -23,9 +23,9 @@ It started as a personal script and grew into something meant to be shared: a re
 installer, a first-run setup page, and encrypted local storage for all credentials.
 
 <p align="center">
-  <img src="docs/ss1.png" width="32%">
-  <img src="docs/ss2.png" width="32%">
-  <img src="docs/ss3.png" width="32%">
+  <a href="docs/ss1.png"><img src="docs/ss1.png" width="32%"></a>
+  <a href="docs/ss2.png"><img src="docs/ss2.png" width="32%"></a>
+  <a href="docs/ss3.png"><img src="docs/ss3.png" width="32%"></a>
 </p>
 
 ## Features
