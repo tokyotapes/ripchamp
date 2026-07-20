@@ -22,6 +22,12 @@ Didn't come from a watched folder? Add it to the queue manually from the same pa
 It started as a personal script and grew into something meant to be shared: a real
 installer, a first-run setup page, and encrypted local storage for all credentials.
 
+<p align="center">
+  <img src="static/img/ss1.png" width="32%">
+  <img src="static/img/ss2.png" width="32%">
+  <img src="static/img/ss3.png" width="32%">
+</p>
+
 ## Features
 
 <img src="static/img/purpose.jpg" align="right" width="400px">
