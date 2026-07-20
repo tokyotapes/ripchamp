@@ -78,7 +78,7 @@ installer, a first-run setup page, and encrypted local storage for all credentia
 winget install for either if they're missing, and installs RIPChamp's own Python package
 dependencies for you.</sub>
 
-## Highly Recommended Download
+## ShadowPlay Users Recommended Download
 
 ShadowPlay Patcher by Temm
 
