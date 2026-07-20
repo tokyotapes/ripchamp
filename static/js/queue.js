@@ -129,10 +129,10 @@ async function refresh() {
         const truncated = h.filename.length > 40;
         const nameHtml = makeSpan(truncateName(h.filename), openTarget === 'old', truncated ? [h.filename] : []);
         const renameHtml = renamed
-          ? `<span class="rename-arrow">&mdash;&mdash;&#10230;  </span>${makeSpan(newValue, true)}`
+          ? `<span class="rename-arrow">&#10230;  </span>${makeSpan(newValue, true)}`
           : '';
 
-        return `<li data-key="${h.finished}" class="${isNew(h.finished, seenKeys.history) ? 'enter' : ''}"><span class="name-wrap">${nameHtml}${renameHtml}${badge}</span><span class="status-${h.status}">${h.status}</span></li>`;
+        return `<li data-key="${h.finished}" class="${isNew(h.finished, seenKeys.history) ? 'enter' : ''}"><span class="name-wrap">${nameHtml}${renameHtml}${badge}</span><span class="item-actions"><span class="status-${h.status}">${h.status}</span><button class="remove-btn" data-finished="${h.finished}" title="Remove from history">&times;</button></span></li>`;
       }).join('')
     : '<li class="empty">No history yet.</li>';
   document.getElementById('clearHistoryBtn').disabled = data.history.length === 0;
@@ -350,6 +350,18 @@ document.getElementById('historyList').addEventListener('click', async (e) => {
   // here rather than also firing a pointless /history-open-folder call.
   if (!nameEl || !nameEl.dataset.finished) return;
   await fetch('/history-open-folder?finished=' + encodeURIComponent(nameEl.dataset.finished));
+});
+
+document.getElementById('historyList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.remove-btn');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  try {
+    await fetch('/history-remove?finished=' + encodeURIComponent(btn.dataset.finished));
+    refresh();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 refresh();

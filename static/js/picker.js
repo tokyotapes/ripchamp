@@ -23,7 +23,9 @@ const startSlider = document.getElementById('startSlider');
 const endSlider = document.getElementById('endSlider');
 const trackSel = document.getElementById('trackSel');
 const playhead = document.getElementById('playhead');
-const timesEl = document.getElementById('times');
+const timeStartEl = document.getElementById('timeStart');
+const timeSelectionEl = document.getElementById('timeSelection');
+const timeEndEl = document.getElementById('timeEnd');
 const playOverlay = document.getElementById('playOverlay');
 const volumeSlider = document.getElementById('volumeSlider');
 const volumeIcon = document.getElementById('volumeIcon');
@@ -51,7 +53,9 @@ function startTime() { return (startSlider.value / 1000) * duration; }
 function endTime() { return (endSlider.value / 1000) * duration; }
 
 function updateTimes() {
-  timesEl.textContent = `start ${fmt(startTime())}  ·  end ${fmt(endTime())}  ·  duration ${fmt(duration)}  ·  selection: ${fmt(endTime() - startTime())}`;
+  timeStartEl.textContent = `start ${fmt(startTime())}`;
+  timeSelectionEl.textContent = `selection ${fmt(endTime() - startTime())}`;
+  timeEndEl.textContent = `end ${fmt(endTime())}`;
   const s = (startSlider.value / 1000) * 100;
   const e = (endSlider.value / 1000) * 100;
   trackSel.style.left = s + '%';
@@ -129,8 +133,8 @@ v.addEventListener('click', () => {
 v.addEventListener('play', () => { playOverlay.classList.add('hidden'); });
 v.addEventListener('pause', () => { playOverlay.classList.remove('hidden'); });
 
-openFileBtn.addEventListener('click', () => { fetch(CONFIG.openFileUrl); });
-openFolderBtn.addEventListener('click', () => { fetch(CONFIG.openFolderUrl); });
+openFileBtn.addEventListener('click', (e) => { e.preventDefault(); fetch(CONFIG.openFileUrl); });
+openFolderBtn.addEventListener('click', (e) => { e.preventDefault(); fetch(CONFIG.openFolderUrl); });
 
 v.volume = parseFloat(volumeSlider.value);
 volumeSlider.addEventListener('input', () => {
@@ -191,6 +195,7 @@ document.getElementById('cancelBtn').addEventListener('click', async () => {
 
   document.querySelector('.filename').textContent = CONFIG.filename;
   v.src = CONFIG.videoUrl;
+  document.getElementById('previewProxyNotice').style.display = CONFIG.usingPreviewProxy ? 'block' : 'none';
 
   CONFIG.channels.forEach(name => {
     const opt = document.createElement('option');

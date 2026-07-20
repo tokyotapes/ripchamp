@@ -26,8 +26,30 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <link href="https://fonts.googleapis.com/css2?family=Workbench&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css">
 <link rel="stylesheet" href="/static/picker.css">
+<link rel="stylesheet" href="/static/queue.css">
+<style>
+  /* picker.css and queue.css are both linked here -- picker.css supplies
+     form controls (row/label/input/select/button.primary) that queue.css
+     doesn't define at all, while queue.css loads second so its version of
+     any selector both files share (body, .card, h1, h2, .brand, etc.) wins,
+     matching the queue/setup pages' look. Two exceptions, same story as
+     setup.html: .brand-left's flex-direction: column (queue.css) beats
+     picker.css's row layout regardless of what picker.css sets, since
+     queue.css is the only one of the two that touches flex-direction here --
+     put the logo/title back on one line. And .brand-name's font-size is
+     only set by picker.css's own class rule (42px), which beats queue.css's
+     bare h1 rule (46px) on specificity alone, load order notwithstanding --
+     force it to match. */
+  .brand-left { flex-direction: row; align-items: center; gap: 14px; }
+  .brand-name { font-size: 46px; }
+  /* This page uses Manrope for its body text instead of the Poppins that
+     queue.css/picker.css both default to -- neither file defines Manrope
+     as the body font, so it's set here directly. */
+  body { font-family: "Manrope", sans-serif; }
+</style>
 </head>
 <body>
 <div class="page">
@@ -39,13 +61,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div class="file-info">
     <span class="filename"></span>
     <div class="file-actions">
-      <button id="openFileBtn" type="button">Open This File</button>
-      <button id="openFolderBtn" type="button">Browse Local Folder</button>
+      <a href="#" id="openFileBtn" class="file-action-link"><span class="file-action-icon">&#9654;</span>Open File on PC</a>
+      <a href="#" id="openFolderBtn" class="file-action-link"><span class="file-action-icon">&#128193;</span>Browse File Location</a>
     </div>
   </div>
 </div>
 
 <div class="card">
+  <div class="preview-proxy-notice" id="previewProxyNotice" style="display: none;">
+    This clip was recorded in 10-bit HEVC/H.265 HDR, so the preview here is a lower-quality
+    stand-in your browser can actually play &mdash; full quality is preserved in the final output.
+  </div>
   <div class="video-wrap">
     <video id="v" preload="metadata"></video>
     <div class="play-overlay" id="playOverlay">
@@ -56,7 +82,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   </div>
 
   <div class="row">
-    <span class="times" id="times">start 0:00.0 &nbsp;·&nbsp; end 0:00.0 &nbsp;·&nbsp; duration 0:00.0</span>
+    <span class="times" id="times">
+      <span id="timeStart">start 0:00.0</span>
+      <span id="timeSelection">selection 0:00.0</span>
+      <span id="timeEnd">end 0:00.0</span>
+    </span>
+  </div>
+  <div class="row">
     <div class="volume-row">
       <span id="volumeIcon">🔊</span>
       <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="1">

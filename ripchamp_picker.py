@@ -39,12 +39,16 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ripchamp import HDR_TRANSFERS, build_tonemap_filter, get_color_transfer
+
 RANGE_RE = re.compile(r"bytes=(\d+)-(\d*)")
 FASTSTART_CACHE_DIR = Path(tempfile.gettempdir()) / "ripchamp_faststart_cache"
+PREVIEW_PROXY_CACHE_DIR = Path(tempfile.gettempdir()) / "ripchamp_preview_proxy_cache"
 
 def build_picker_config(
-    filename: str, channel_names: list, video_url: str = "/video", confirm_url: str = "/confirm",
-    queue_url: str = None, open_file_url: str = "/open-file", open_folder_url: str = "/open-folder",
+    filename: str, channel_names: list, preview_path: Path = None, video_url: str = "/video",
+    confirm_url: str = "/confirm", queue_url: str = None, open_file_url: str = "/open-file",
+    open_folder_url: str = "/open-folder",
 ) -> dict:
     """Per-item config static/picker.js fetches at load (from
     "<page-path>/config.json", resolved client-side relative to wherever
@@ -53,7 +57,10 @@ def build_picker_config(
     templating. queue_url: if set, the page redirects there after
     Confirm/Cancel instead of showing a static "you can close this tab"
     message -- used by ripchamp_queue_server.py to bounce back to the
-    queue list."""
+    queue list. preview_path: the actual source file, used only to check
+    whether the browser preview needs a lower-quality proxy (see
+    needs_preview_proxy) -- the real crop/encode always runs against the
+    original file regardless of this flag."""
     return {
         "filename": filename,
         "channels": channel_names,
@@ -62,6 +69,7 @@ def build_picker_config(
         "queueUrl": queue_url,
         "openFileUrl": open_file_url,
         "openFolderUrl": open_folder_url,
+        "usingPreviewProxy": needs_preview_proxy(preview_path) if preview_path else False,
     }
 
 
@@ -95,6 +103,67 @@ def _moov_is_first(path: Path) -> bool:
     except OSError:
         pass
     return True
+
+
+def needs_preview_proxy(path: Path) -> bool:
+    """True when the browser's <video> tag likely can't decode path
+    directly -- 10-bit HEVC/H.265 HDR captures (common on HDR/ultrawide
+    monitor recordings) aren't supported by Chrome's built-in decoder
+    without OS-level HEVC codec support, which most Windows installs don't
+    have. HDR detection mirrors ripchamp.py's own tonemap step."""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name,pix_fmt", "-of", "csv=s=x:p=0", str(path),
+        ],
+        capture_output=True, text=True,
+    )
+    codec_pix = result.stdout.strip().lower()
+    is_hevc = codec_pix.startswith("hevc")
+    is_10bit = "10le" in codec_pix or "10be" in codec_pix
+    is_hdr = get_color_transfer(path) in HDR_TRANSFERS
+    return is_hevc or is_10bit or is_hdr
+
+
+def ensure_preview_proxy(path: Path) -> tuple[Path, bool]:
+    """(path_to_stream, used_proxy). If path needs a preview proxy (see
+    needs_preview_proxy), transcode a small cached H.264 SDR copy for the
+    browser to play -- tone-mapped the same way as ripchamp.py's own HDR
+    handling, downscaled since it's preview-only. The real crop/encode
+    still runs against the original file, so final output quality/HDR is
+    unaffected. Cached by content hash + mtime, same pattern as
+    ensure_faststart_video's cache below."""
+    if not needs_preview_proxy(path):
+        return path, False
+
+    PREVIEW_PROXY_CACHE_DIR.mkdir(exist_ok=True)
+    stat = path.stat()
+    key = hashlib.sha1(str(path.resolve()).encode()).hexdigest()[:16]
+    cache_path = PREVIEW_PROXY_CACHE_DIR / f"{key}_{int(stat.st_mtime)}.mp4"
+    if cache_path.is_file():
+        return cache_path, True
+
+    for stale in PREVIEW_PROXY_CACHE_DIR.glob(f"{key}_*.mp4"):
+        stale.unlink(missing_ok=True)
+
+    print(f"Transcoding a browser-preview proxy for {path.name} (10-bit HEVC/HDR source)...")
+    vf = "scale=-2:720"
+    if get_color_transfer(path) in HDR_TRANSFERS:
+        vf += "," + build_tonemap_filter("hable", 75.0, 0.0)
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-err_detect", "ignore_err", "-fflags", "+discardcorrupt+genpts",
+            "-i", str(path), "-vf", vf,
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+            "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(cache_path),
+        ],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0 or not cache_path.is_file():
+        print(f"Preview proxy transcode failed, streaming original file as-is: {result.stderr.strip()[-500:]}")
+        return path, False
+    return cache_path, True
 
 
 def ensure_faststart_video(path: Path) -> Path:
@@ -139,7 +208,8 @@ def ensure_faststart_video(path: Path) -> Path:
 def serve_video_range(handler, video_path: Path):
     """Stream video_path to an http.server request handler, honoring Range
     requests so <video> seeking works."""
-    video_path = ensure_faststart_video(video_path)
+    proxy_path, used_proxy = ensure_preview_proxy(video_path)
+    video_path = proxy_path if used_proxy else ensure_faststart_video(video_path)
     file_size = video_path.stat().st_size
     mime = mimetypes.guess_type(str(video_path))[0] or "video/mp4"
     range_header = handler.headers.get("Range")

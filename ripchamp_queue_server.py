@@ -93,6 +93,7 @@ Endpoints:
     GET  /item/<id>/open-folder   reveal the source file in Explorer
     GET  /item/<id>/remove        drop a single pending item from the queue, recorded as canceled in history
     GET  /history-open-folder?finished=<ts>  reveal a finished local (non-upload) job's output file in Explorer
+    GET  /history-remove?finished=<ts>  remove a single finished-clips entry (doesn't touch files on disk)
     POST /item/<id>/confirm       picker page's Confirm/Cancel -> processes or drops the item
     POST /item/<id>/cancel-processing  kill an in-progress job and delete anything it created
 """
@@ -513,6 +514,17 @@ class QueueState:
         with self.lock:
             return next((dict(h) for h in self.history if h.get("finished") == finished), None)
 
+    def remove_history_entry(self, finished: float) -> bool:
+        """Drop a single finished-clips entry, keyed by its "finished"
+        timestamp (unique enough per entry, same key already used by
+        find_history_by_finished/the "open in Explorer" link). Doesn't
+        touch any file on disk -- just the record. Returns whether
+        something was actually removed."""
+        with self.lock:
+            before = len(self.history)
+            self.history = [h for h in self.history if h.get("finished") != finished]
+            return len(self.history) != before
+
 
 STATE = QueueState()
 
@@ -893,6 +905,17 @@ class QueueHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        if parsed.path == "/history-remove":
+            qs = urllib.parse.parse_qs(parsed.query)
+            finished_str = qs.get("finished", [None])[0]
+            if finished_str:
+                try:
+                    STATE.remove_history_entry(float(finished_str))
+                except ValueError:
+                    pass
+            self._send_json({"ok": True})
+            return
+
         if parsed.path == "/add":
             qs = urllib.parse.parse_qs(parsed.query)
             path_str = qs.get("path", [None])[0]
@@ -931,7 +954,7 @@ class QueueHandler(BaseHTTPRequestHandler):
                 return
             channel_names = list(load_discord_webhooks().keys()) if load_discord_webhooks else []
             config = _reload_if_changed(ripchamp_picker).build_picker_config(
-                item["path"].name, channel_names,
+                item["path"].name, channel_names, preview_path=item["path"],
                 video_url=f"/item/{item_id}/video", confirm_url=f"/item/{item_id}/confirm",
                 queue_url="/", open_file_url=f"/item/{item_id}/open-file",
                 open_folder_url=f"/item/{item_id}/open-folder",
