@@ -78,6 +78,21 @@ PAYLOAD_DIRS = ["static"]
 
 PYTHON_CANDIDATES = ["python", "py", "python3"]
 
+# Same dark/violet-blue palette as the queue/setup/picker pages (see
+# static/css/queue.css's :root) -- Tkinter can't use the web fonts those
+# pages use without bundling font files, so this sticks to Segoe UI
+# (Windows' own default) for a look that's dark/branded rather than a
+# literal font match.
+BG = "#0b0c0f"
+BG_ELEV = "#15171c"
+BORDER = "#262931"
+TEXT = "#dcdcdc"
+TEXT_DIM = "#8b909c"
+ACCENT = "#5865F2"
+ACCENT_HOVER = "#4651c2"
+FONT = ("Segoe UI", 12)
+FONT_BOLD = ("Segoe UI", 12, "bold")
+
 # Matches ripchamp_queue_server.py's own DEFAULT_PORT -- duplicated here
 # rather than imported to keep the installer's payload-resolution logic
 # (which handles both frozen and dev-mode paths) independent of the app's
@@ -272,6 +287,28 @@ def install(target_dir: Path, port: int, status_callback=None) -> str:
     return python_exe
 
 
+def _clean_subprocess_env() -> dict:
+    """PyInstaller's bootloader sets TCL_LIBRARY/TK_LIBRARY in this
+    installer process's own environment, pointing at its own onefile
+    temp-extraction folder (e.g. ...\\_MEI12345\\_tcl_data) so its bundled
+    tkinter can find Tcl's init.tcl. subprocess.Popen inherits the whole
+    parent environment by default, so the queue server/watcher launched
+    below would inherit those same paths -- which are specific to (and
+    not guaranteed to outlive) this installer process, not the system
+    Python the queue server actually runs under. That mismatch is exactly
+    why the setup page's Browse dialog crashed instead of opening right
+    after a fresh install (confirmed via a captured traceback:
+    `_tkinter.TclError: Can't find a usable init.tcl`) while a later
+    manual restart -- launched by anything other than this installer --
+    never had the bad env vars in the first place and worked fine.
+    Stripping them here lets the child find its own system Tcl/Tk
+    install correctly."""
+    env = os.environ.copy()
+    env.pop("TCL_LIBRARY", None)
+    env.pop("TK_LIBRARY", None)
+    return env
+
+
 def launch_server(python_exe: str, target_dir: Path, port: int):
     """Start the queue server for the first time, opening a browser to
     /setup. No visible console -- matches how Ensure-QueueServer in
@@ -280,24 +317,115 @@ def launch_server(python_exe: str, target_dir: Path, port: int):
         [python_exe, "-u", str(target_dir / "ripchamp_queue_server.py"), "--port", str(port), "--open-setup"],
         cwd=str(target_dir),
         creationflags=subprocess.CREATE_NO_WINDOW,
+        env=_clean_subprocess_env(),
     )
 
 
+def _label(parent, **kwargs):
+    kwargs.setdefault("bg", BG)
+    kwargs.setdefault("fg", TEXT)
+    kwargs.setdefault("font", FONT)
+    return tk.Label(parent, **kwargs)
+
+
+def _entry(parent, **kwargs):
+    kwargs.setdefault("bg", BG_ELEV)
+    kwargs.setdefault("fg", TEXT)
+    kwargs.setdefault("insertbackground", TEXT)
+    kwargs.setdefault("relief", "flat")
+    kwargs.setdefault("highlightthickness", 1)
+    kwargs.setdefault("highlightbackground", BORDER)
+    kwargs.setdefault("highlightcolor", ACCENT)
+    kwargs.setdefault("font", FONT)
+    return tk.Entry(parent, **kwargs)
+
+
+def _frame(parent, **kwargs):
+    kwargs.setdefault("bg", BG)
+    return tk.Frame(parent, **kwargs)
+
+
+def _button(parent, text, command=None, primary=True, **kwargs):
+    """primary=True: filled accent button (Install, Try Again, winget
+    installs). primary=False: dim outline-ish button (Cancel). Darkens on
+    hover, matching the queue/setup pages' button hover convention."""
+    bg = ACCENT if primary else BORDER
+    fg = TEXT if primary else TEXT_DIM
+    hover_bg = ACCENT_HOVER if primary else "#33373f"
+    btn = tk.Button(
+        parent, text=text, command=command, bg=bg, fg=fg,
+        activebackground=hover_bg, activeforeground=TEXT,
+        disabledforeground=TEXT_DIM, relief="flat", bd=0, font=FONT,
+        padx=12, pady=6, cursor="hand2", **kwargs,
+    )
+    btn.bind("<Enter>", lambda e: btn.config(bg=hover_bg) if str(btn["state"]) != "disabled" else None)
+    btn.bind("<Leave>", lambda e: btn.config(bg=bg) if str(btn["state"]) != "disabled" else None)
+    return btn
+
+
 class InstallerApp:
-    """One window whose content swaps between two views: a missing-
-    dependencies view (shown first if anything's missing) and the normal
-    choose-directory/install view. Never both onscreen at once, and no
-    separate popup -- "Try Again" on the missing-deps view just re-checks
-    and swaps to the install view if everything's present now."""
+    """One window whose content swaps between three views: an intro view
+    (shown first, always), a missing-dependencies view (shown next if
+    anything's missing), and the normal choose-directory/install view.
+    Never more than one onscreen at once, and no separate popups --
+    "Continue" on the intro view runs the dependency check and routes to
+    whichever of the other two applies; "Try Again" on the missing-deps
+    view just re-checks and swaps to the install view if everything's
+    present now."""
 
     def __init__(self, root):
         self.root = root
         self.root.resizable(False, False)
-        self.show_current_view()
+        self.root.configure(bg=BG)
+        self._build_intro_view()
 
     def _clear(self):
         for widget in self.root.winfo_children():
             widget.destroy()
+
+    def _center_window(self):
+        """Re-center on screen -- called after (re)building either view,
+        since they're different sizes and the window should stay centered
+        rather than staying put at wherever the previous, differently-sized
+        view happened to be positioned."""
+        self.root.update_idletasks()
+        width = self.root.winfo_reqwidth()
+        height = self.root.winfo_reqheight()
+        x = (self.root.winfo_screenwidth() - width) // 2
+        y = (self.root.winfo_screenheight() - height) // 2
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+
+    def _build_intro_view(self):
+        self._clear()
+        self.root.title("RIPChamp Setup")
+
+        _label(
+            self.root, text="Thank you for (hopefully) installing RIPChamp!",
+            font=FONT_BOLD, padx=20,
+        ).pack(pady=(20, 12))
+
+        _label(
+            self.root,
+            text=(
+                "This is an alpha release, things might get weird. Submit bug reports to "
+                "the GitHub if you can, the more info the better."
+            ),
+            fg=TEXT_DIM, justify="left", wraplength=420, padx=20,
+        ).pack()
+
+        _label(
+            self.root, text="Press Continue to proceed with installation.",
+            fg=TEXT_DIM, justify="left", wraplength=420, padx=20,
+        ).pack(pady=(12, 20))
+
+        btn_row = _frame(self.root)
+        btn_row.pack(pady=(0, 20))
+        _button(btn_row, "Continue", command=self.show_current_view, width=14).pack(
+            side="left", padx=6)
+        _button(btn_row, "Cancel", command=self.root.destroy, primary=False, width=14).pack(
+            side="left", padx=6)
+
+        self._center_window()
 
     def show_current_view(self):
         missing = check_dependencies()
@@ -310,29 +438,31 @@ class InstallerApp:
         self._clear()
         self.root.title("RIPChamp Installer - Missing Dependencies")
 
-        tk.Label(
+        _label(
             self.root,
             text="Install the missing dependencies below, then click Try Again.",
-            justify="left", wraplength=360, padx=20, pady=16,
+            justify="left", padx=20, pady=16,
         ).pack()
 
         for dep in missing:
-            row = tk.Frame(self.root)
+            row = _frame(self.root)
             row.pack(fill="x", padx=20, pady=4)
-            tk.Label(row, text=f"{dep.name}:", width=10, anchor="w").pack(side="left")
-            install_btn = tk.Button(row, text="Install via winget", width=16)
+            _label(row, text=f"{dep.name}:", width=10, anchor="w").pack(side="left")
+            install_btn = _button(row, "Install via winget", width=16)
             install_btn.pack(side="left")
             install_btn.config(command=lambda d=dep, b=install_btn: self.on_winget_install(d, b))
-            link = tk.Label(row, text="or download manually", fg="#2952e3", cursor="hand2")
+            link = _label(row, text="or download manually", fg=ACCENT, cursor="hand2")
             link.pack(side="left", padx=(10, 0))
             link.bind("<Button-1>", lambda e, u=dep.fallback_url: webbrowser.open(u))
 
-        btn_row = tk.Frame(self.root)
+        btn_row = _frame(self.root)
         btn_row.pack(pady=16)
-        tk.Button(btn_row, text="Try Again", width=14, command=self.show_current_view).pack(
+        _button(btn_row, "Try Again", command=self.show_current_view, width=14).pack(
             side="left", padx=6)
-        tk.Button(btn_row, text="Cancel", width=14, command=self.root.destroy).pack(
+        _button(btn_row, "Cancel", command=self.root.destroy, primary=False, width=14).pack(
             side="left", padx=6)
+
+        self._center_window()
 
     def on_winget_install(self, dep, button):
         button.config(state="disabled", text="Installing...")
@@ -361,29 +491,33 @@ class InstallerApp:
         default_dir = str(Path.home() / "ripchamp")
         pad = {"padx": 16, "pady": 8}
 
-        tk.Label(self.root, text="Choose a directory to install RIPChamp:").grid(
+        _label(self.root, text="Choose a directory to install RIPChamp:").grid(
             row=0, column=0, columnspan=2, sticky="w", **pad)
 
         self.path_var = tk.StringVar(value=default_dir)
-        tk.Entry(self.root, textvariable=self.path_var, width=48).grid(
+        _entry(self.root, textvariable=self.path_var, width=48).grid(
             row=1, column=0, padx=(16, 4), pady=(0, 8))
 
-        tk.Button(self.root, text="Browse...", command=self.browse).grid(
+        _button(self.root, "Browse...", command=self.browse, primary=False).grid(
             row=1, column=1, padx=(4, 16), pady=(0, 8))
 
-        tk.Label(self.root, text="Port to use for RIPChamp:").grid(
-            row=2, column=0, columnspan=2, sticky="w", padx=16)
+        port_row = _frame(self.root)
+        port_row.grid(row=2, column=0, columnspan=2, sticky="w", padx=16, pady=(0, 8))
+
+        _label(port_row, text="Port for RIPChamp: ").pack(side="left")
+        _label(port_row, text="http://127.0.0.1:", fg=TEXT_DIM).pack(side="left")
 
         self.port_var = tk.StringVar(value=str(DEFAULT_PORT))
-        tk.Entry(self.root, textvariable=self.port_var, width=10).grid(
-            row=3, column=0, sticky="w", padx=(16, 4), pady=(0, 8))
+        _entry(port_row, textvariable=self.port_var, width=8).pack(side="left")
 
         self.status_var = tk.StringVar(value="")
-        tk.Label(self.root, textvariable=self.status_var, fg="#555").grid(
+        _label(self.root, textvariable=self.status_var, fg=TEXT_DIM).grid(
             row=4, column=0, columnspan=2, sticky="w", padx=16)
 
-        self.install_btn = tk.Button(self.root, text="Install", command=self.on_install, width=14)
+        self.install_btn = _button(self.root, "Install", command=self.on_install, width=14)
         self.install_btn.grid(row=5, column=0, columnspan=2, pady=16)
+
+        self._center_window()
 
     def browse(self):
         chosen = filedialog.askdirectory(initialdir=self.path_var.get() or str(Path.home()))

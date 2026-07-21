@@ -30,16 +30,21 @@ directly.
 
 Usage:
   powershell -File ripchamp_tools.ps1 -Mode Watch [-WatchPath "C:\..."]
-      Watches WatchPath (and subfolders) for new .mp4 files and adds each
-      one to the persistent queue server (ripchamp_queue_server.py,
-      http://127.0.0.1:8787/ by default) -- bookmark that page and
-      process clips whenever you're ready, so a clip finishing mid-game
-      doesn't yank focus away from it. Leave running -- Ctrl+C to stop.
+      Keeps the queue server running and, once the setup page's "Let us
+      watch for new videos to clip?" is set to Yes and a folder has been
+      chosen and saved (ripchamp_config.json's watch_enabled/
+      watch_directory), watches that folder (and subfolders) for new .mp4
+      files and adds each one to the persistent queue server
+      (ripchamp_queue_server.py, http://127.0.0.1:8787/ by default) --
+      bookmark that page and process clips whenever you're ready, so a
+      clip finishing mid-game doesn't yank focus away from it. Leave
+      running -- Ctrl+C to stop.
 
-      If ripchamp_config.json has a watch_directory (set via the setup
-      page's "Browse for Folder..." button), it overrides -WatchPath at
-      startup, and is also polled every 5s while running so changing it
-      later takes effect live, no restart needed.
+      Nothing is watched (not even -WatchPath's own default) until both
+      of those are configured -- a fresh install with folder watching
+      still turned off just keeps the queue server alive. Both settings
+      are polled every 5s while running, so enabling/disabling watching or
+      changing the folder later all take effect live, no restart needed.
 
   powershell -File ripchamp_tools.ps1 -Mode InstallTask [-WatchPath "C:\..."]
       Registers a scheduled task to run -Mode Watch hidden at every logon.
@@ -78,13 +83,28 @@ $TaskName = "RIPChampWatcher"
 function Get-ConfiguredWatchPath {
     # Set via the setup page's "Browse for Folder..." button (saved to
     # ripchamp_config.json's watch_directory key by ripchamp_queue_server.py).
-    # None/missing means fall back to the -WatchPath default.
+    # None/missing means no folder has been chosen yet.
     if (-not (Test-Path $ConfigPath)) { return $null }
     try {
         $config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
         if ($config.watch_directory) { return $config.watch_directory }
     } catch { }
     return $null
+}
+
+function Get-ConfiguredWatchEnabled {
+    # The setup page's "Let us watch for new videos to clip?" choice
+    # (saved to ripchamp_config.json's watch_enabled key by
+    # ripchamp_queue_server.py). Defaults to $false -- mirrors
+    # get_watch_enabled()'s own default there, so a fresh install never
+    # starts watching any folder (including the -WatchPath fallback below)
+    # until the user has explicitly opted in, picked a folder, and saved.
+    if (-not (Test-Path $ConfigPath)) { return $false }
+    try {
+        $config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+        if ($null -ne $config.watch_enabled) { return [bool]$config.watch_enabled }
+    } catch { }
+    return $false
 }
 
 function Get-ConfiguredPort {
@@ -153,28 +173,15 @@ function Invoke-Watch {
         [RIPChampWin32]::ShowWindow($consoleHandle, 0) | Out-Null  # SW_HIDE
     }
 
-    $configuredPath = Get-ConfiguredWatchPath
-    if ($configuredPath) {
-        $WatchPath = $configuredPath
-    }
-
-    if (-not (Test-Path $WatchPath)) {
-        Write-Host "Error: watch path not found: $WatchPath" -ForegroundColor Red
-        exit 1
-    }
-
     if (Ensure-QueueServer) {
         Write-Host "Queue server ready at http://127.0.0.1:$QueuePort/ -- bookmark it and process clips whenever you're ready."
     } else {
         Write-Host "Queue server unavailable -- new clips won't be queued until it's running. Try start_ripchamp.bat." -ForegroundColor Yellow
     }
 
-    $watcher = New-Object System.IO.FileSystemWatcher
-    $watcher.Path = $WatchPath
-    $watcher.IncludeSubdirectories = $true
-    $watcher.Filter = "*.mp4"
-    $watcher.NotifyFilter = [System.IO.NotifyFilters]::FileName
-    $watcher.EnableRaisingEvents = $true
+    $watcher = $null
+    $activePath = $null
+    $watcherSubId = $null
 
     $action = {
         $filePath = $Event.SourceEventArgs.FullPath
@@ -221,24 +228,53 @@ function Invoke-Watch {
         }
     }
 
-    Register-ObjectEvent -InputObject $watcher -EventName Created -Action $action `
-        -MessageData @{ QueuePort = $QueuePort } | Out-Null
+    # Starts, stops, or re-points the actual FileSystemWatcher based on the
+    # setup page's live "watch_enabled"/watch_directory config -- called
+    # once up front and then every 5s, so enabling/disabling/changing the
+    # watch folder all take effect without restarting this process, and
+    # nothing gets watched at all (not even a fallback path) until the
+    # user has explicitly opted in, picked a folder, and saved.
+    function Sync-Watcher {
+        $enabled = Get-ConfiguredWatchEnabled
+        $configuredPath = Get-ConfiguredWatchPath
+        $shouldWatch = $enabled -and $configuredPath -and (Test-Path $configuredPath)
 
-    Write-Host "Watching '$WatchPath' and subfolders for new .mp4 files. Press Ctrl+C to stop."
+        if ($shouldWatch -and $configuredPath -ne $script:activePath) {
+            if ($script:watcher) {
+                $script:watcher.EnableRaisingEvents = $false
+                Unregister-Event -SourceIdentifier $script:watcherSubId -ErrorAction SilentlyContinue
+                $script:watcher.Dispose()
+            }
+            $script:watcher = New-Object System.IO.FileSystemWatcher
+            $script:watcher.Path = $configuredPath
+            $script:watcher.IncludeSubdirectories = $true
+            $script:watcher.Filter = "*.mp4"
+            $script:watcher.NotifyFilter = [System.IO.NotifyFilters]::FileName
+            $subscription = Register-ObjectEvent -InputObject $script:watcher -EventName Created -Action $action `
+                -MessageData @{ QueuePort = $QueuePort }
+            $script:watcherSubId = $subscription.Name
+            $script:watcher.EnableRaisingEvents = $true
+            $script:activePath = $configuredPath
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Watching '$configuredPath' and subfolders for new .mp4 files."
+        } elseif (-not $shouldWatch -and $script:watcher) {
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Folder watching turned off -- no longer watching '$($script:activePath)'."
+            $script:watcher.EnableRaisingEvents = $false
+            Unregister-Event -SourceIdentifier $script:watcherSubId -ErrorAction SilentlyContinue
+            $script:watcher.Dispose()
+            $script:watcher = $null
+            $script:activePath = $null
+        }
+    }
 
-    # Poll for the watch folder changing in the config (set via the setup
-    # page) so a new folder takes effect live, without restarting the
-    # watcher -- FileSystemWatcher supports updating .Path while running.
+    if (-not (Get-ConfiguredWatchEnabled) -or -not (Get-ConfiguredWatchPath)) {
+        Write-Host "Folder watching isn't turned on yet -- enable it and choose a folder on the setup page, then save."
+    }
+    Sync-Watcher
+
+    Write-Host "Press Ctrl+C to stop."
     while ($true) {
         Start-Sleep -Seconds 5
-        $configuredPath = Get-ConfiguredWatchPath
-        if ($configuredPath -and $configuredPath -ne $WatchPath -and (Test-Path $configuredPath)) {
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Watch folder changed -- now watching '$configuredPath'"
-            $watcher.EnableRaisingEvents = $false
-            $watcher.Path = $configuredPath
-            $WatchPath = $configuredPath
-            $watcher.EnableRaisingEvents = $true
-        }
+        Sync-Watcher
     }
 }
 

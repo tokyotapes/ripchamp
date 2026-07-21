@@ -38,3 +38,6 @@ consolas-webfont.woff
 # OS cruft
 Thumbs.db
 .DS_Store
+
+# Local dev/test helper -- not part of the shipped app
+servertest.bat

@@ -55,10 +55,12 @@ foreach ($file in $payloadFiles) {
 $addDataArgs += "--add-data"
 $addDataArgs += "$(Join-Path $ProjectRoot 'static');static"
 
+$iconPath = Join-Path $ProjectRoot "static\img\favicon.ico"
+
 # `python -m PyInstaller` rather than the bare `pyinstaller` command --
 # pip installs the pyinstaller.exe launcher script into a Scripts folder
 # that isn't always on PATH, but the module is always importable via -m.
-python -m PyInstaller --onefile --noconsole --name RIPChampInstaller @addDataArgs ripchamp_installer.py
+python -m PyInstaller --onefile --noconsole --name RIPChampInstaller --icon "$iconPath" @addDataArgs ripchamp_installer.py
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""

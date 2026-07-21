@@ -207,9 +207,12 @@ def set_start_at_startup(enabled: bool):
 
 def get_watch_enabled() -> bool:
     """The setup page's last-saved "Let us watch for new videos to clip?"
-    choice. Defaults to True, matching the radio's own default when unset."""
+    choice. Defaults to False on a fresh install -- the watcher must not
+    start scanning any folder (including ripchamp_tools.ps1's own hardcoded
+    fallback path) until the user has explicitly opted in, picked a
+    folder, and saved. Matches the radio's own default when unset."""
     value = load_config().get("watch_enabled")
-    return True if value is None else bool(value)
+    return False if value is None else bool(value)
 
 
 def set_watch_enabled(enabled: bool):
@@ -283,6 +286,29 @@ def run_elevated_tools_mode(mode: str, timeout: float = 90) -> tuple:
     return True, ""
 
 
+def ensure_watcher_running():
+    """After the setup page saves "watch_enabled" = yes, actually start the
+    watcher now rather than waiting for the next logon -- InstallTask/
+    DisableTask (run right before this from /save-setup-settings) only ever
+    change the scheduled task's logon trigger, they don't start anything.
+    No-op if a watcher for this install is already running. Mirrors
+    start_ripchamp.bat's own two-step approach: prefer `schtasks /run` (so
+    it's the same tracked task instance Task Manager/Get-WatcherStatus
+    already know about) and fall back to launching ripchamp_tools.ps1
+    directly when there's no scheduled task (start_at_startup == no)."""
+    if get_watcher_status()["running"]:
+        return
+    if get_start_at_startup():
+        subprocess.run(["schtasks", "/run", "/tn", "RIPChampWatcher"],
+                        capture_output=True, timeout=15)
+    else:
+        subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-File", str(SCRIPT_DIR / "ripchamp_tools.ps1"), "-Mode", "Watch"],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+
+
 def _reload_if_changed(module):
     """Hot-reload a module if its source file has changed on disk since we
     last loaded it, so Python-logic edits to ripchamp_picker.py take
@@ -354,6 +380,73 @@ def get_watcher_status():
     return empty
 
 
+def _schedule_center_dialog(root):
+    """Spawn a background thread that moves the native file/folder dialog
+    to the center of the screen once it exists.
+
+    root itself is withdrawn (invisible) and only ever acts as the
+    dialog's parent, so there's no owner geometry for Windows to center
+    the dialog against -- it just opens wherever it last was (or a
+    default position). This finds the actual dialog window and
+    repositions it directly instead.
+
+    Has to be a real OS thread, not a Tk `after()` callback: the native
+    common dialog (GetOpenFileNameW/SHBrowseForFolder) runs its own
+    internal message pump for as long as it's open, which blocks Tcl's
+    own event loop completely -- an `after()` callback would only ever
+    fire once the dialog's already closed."""
+    import ctypes
+    import time
+    from ctypes import wintypes
+
+    # winfo_id() is a Tcl call -- has to happen on this (the calling)
+    # thread, since Tkinter isn't thread-safe for cross-thread calls into
+    # the interpreter. The background thread below only ever touches the
+    # raw HWND integer, never root itself.
+    root_hwnd = root.winfo_id()
+
+    def find_and_center():
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        my_pid = kernel32.GetCurrentProcessId()
+
+        # Poll briefly for the dialog window to appear -- it doesn't exist
+        # the instant askopenfilename()/askdirectory() is called.
+        dialog_hwnd = None
+        for _ in range(20):
+            time.sleep(0.1)
+
+            def enum_proc(hwnd, _lparam):
+                nonlocal dialog_hwnd
+                owner_pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_pid))
+                if owner_pid.value == my_pid and hwnd != root_hwnd and user32.IsWindowVisible(hwnd):
+                    dialog_hwnd = hwnd
+                    return False
+                return True
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            user32.EnumWindows(WNDENUMPROC(enum_proc), 0)
+            if dialog_hwnd is not None:
+                break
+        if dialog_hwnd is None:
+            return
+
+        rect = wintypes.RECT()
+        user32.GetWindowRect(dialog_hwnd, ctypes.byref(rect))
+        width = rect.right - rect.left
+        height = rect.bottom - rect.top
+        screen_w = user32.GetSystemMetrics(0)   # SM_CXSCREEN
+        screen_h = user32.GetSystemMetrics(1)   # SM_CYSCREEN
+        x = (screen_w - width) // 2
+        y = (screen_h - height) // 2
+
+        SWP_NOSIZE, SWP_NOZORDER = 0x0001, 0x0004
+        user32.SetWindowPos(dialog_hwnd, None, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER)
+
+    threading.Thread(target=find_and_center, daemon=True).start()
+
+
 def open_file_dialog(title="Choose a video to process", filetypes=None, multiple=False):
     """Pop a native "Open File" dialog on the machine running this server
     (it's always the user's own desktop, never remote) and return the chosen
@@ -369,6 +462,7 @@ def open_file_dialog(title="Choose a video to process", filetypes=None, multiple
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
+    _schedule_center_dialog(root)
     try:
         if multiple:
             return list(filedialog.askopenfilenames(title=title, filetypes=filetypes))
@@ -388,6 +482,7 @@ def open_directory_dialog(title: str) -> str | None:
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
+    _schedule_center_dialog(root)
     try:
         path = filedialog.askdirectory(title=title)
     finally:
@@ -796,6 +891,15 @@ class QueueHandler(BaseHTTPRequestHandler):
 
             mode = "InstallTask" if start_at_startup == "yes" else "DisableTask"
             ok, error = run_elevated_tools_mode(mode)
+
+            # The queue server is already running -- this very request is
+            # being served by it. The watcher isn't necessarily, though:
+            # InstallTask/DisableTask above only ever touch the scheduled
+            # task's logon trigger, so without this, a fresh "yes" + folder
+            # pick wouldn't actually start watching until the next login.
+            if ok and watch_enabled == "yes":
+                ensure_watcher_running()
+
             self._send_json({"ok": ok, "error": error})
             return
 
