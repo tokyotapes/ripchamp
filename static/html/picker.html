@@ -107,45 +107,70 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <div class="card" id="outputCard">
   <h2>Output</h2>
-  <div class="row">
-    <label><input type="radio" name="type" value="video" checked> Video</label>
-    <label><input type="radio" name="type" value="audio"> Audio only (extract mp3, saved locally)</label>
-  </div>
 
-  <div class="row" id="aspectRow">
-    <label><input type="radio" name="aspect" value="crop" checked> Crop 16:9</label>
-    <label><input type="radio" name="aspect" value="original"> Keep original aspect ratio</label>
-  </div>
-
-  <div class="row">
-    <label for="titleInput" id="titleLabel" style="min-width:40px">Title</label>
-    <input type="text" id="titleInput" placeholder="blank for default">
-  </div>
-
-  <div id="videoOptions">
-    <div class="row">
-      <label><input type="radio" name="dest" value="upload" checked> Upload</label>
-      <label><input type="radio" name="dest" value="local"> Local only (just crop, don't upload)</label>
+  <div class="dual-row" id="destRow">
+    <div class="dual-card selected" id="uploadCard" data-side="upload">
+      <div class="choice-title"><span class="choice-icon">&#9729;&#65039;</span>Upload</div>
+      <div class="choice-sub">Send to YouTube or Streamable</div>
+      <div class="dual-body">
+        <div class="row">
+          <label for="uploadNameInput">Title</label>
+          <input type="text" id="uploadNameInput" placeholder="blank for default">
+        </div>
+        <div class="row segmented" id="uploadAspectRow">
+          <label class="segmented-option"><input type="radio" name="uploadAspect" value="crop" checked><span>Crop 16:9</span></label>
+          <label class="segmented-option"><input type="radio" name="uploadAspect" value="original"><span>Keep original aspect ratio</span></label>
+        </div>
+        <div class="row" id="hostRow">
+          <label id="hostYoutubeOption"><input type="radio" name="videoHost" value="youtube" checked> <img src="/static/youtube-glyph.png" alt="" width="16" height="16" style="vertical-align: middle; object-fit: contain;"> YouTube</label>
+          <label id="hostStreamableOption"><input type="radio" name="videoHost" value="streamable"> <img src="/static/streamable-glyph.svg" alt="" width="16" height="16" style="vertical-align: middle; object-fit: contain;"> Streamable (max 250MB)</label>
+        </div>
+        <div class="row" id="discordPostRow" style="display:none">
+          <label for="discordPostYes" style="min-width:0"><img src="/static/discord-glyph.svg" alt="" width="16" height="16" style="vertical-align: middle; object-fit: contain;"> Post to Discord?</label>
+          <div class="segmented" style="flex:1">
+            <label class="segmented-option"><input type="radio" id="discordPostYes" name="postToDiscord" value="yes" checked><span>Yes</span></label>
+            <label class="segmented-option"><input type="radio" name="postToDiscord" value="no"><span>No</span></label>
+          </div>
+        </div>
+        <div class="row" id="channelRow" style="display:none">
+          <label for="channelSelect" style="min-width:40px"><img src="/static/discord-glyph.svg" alt="" width="16" height="16" style="vertical-align: middle; object-fit: contain;"> Discord</label>
+          <select id="channelSelect"></select>
+        </div>
+        <hr class="create-clip-divider">
+        <div class="row create-clip-row">
+          <button type="button" class="success" id="uploadClipBtn">Create Clip</button>
+        </div>
+        <div class="create-clip-caption" id="uploadClipCaption"></div>
+      </div>
     </div>
-    <div class="row" id="hostRow" style="display:none">
-      <label><input type="radio" name="videoHost" value="youtube" checked> <img src="/static/youtube-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> YouTube</label>
-      <label><input type="radio" name="videoHost" value="streamable"> <img src="/static/streamable-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> Streamable (max 250MB)</label>
-    </div>
-    <div class="row" id="discordPostRow" style="display:none">
-      <label for="discordPostYes" style="min-width:0"><img src="/static/discord-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> Post to Discord?</label>
-      <label><input type="radio" id="discordPostYes" name="postToDiscord" value="yes" checked> Yes</label>
-      <label><input type="radio" name="postToDiscord" value="no"> No</label>
-    </div>
-    <div class="row" id="channelRow" style="display:none">
-      <label for="channelSelect" style="min-width:40px"><img src="/static/discord-icon.gif" alt="" width="16" height="16" style="vertical-align: middle;"> Discord</label>
-      <select id="channelSelect"></select>
+    <div class="dual-card" id="localCard" data-side="local">
+      <div class="choice-title"><span class="choice-icon">&#128193;</span>Local only</div>
+      <div class="choice-sub">Just crop, save to your PC</div>
+      <div class="dual-body">
+        <div class="row">
+          <label for="localNameInput">File name</label>
+          <input type="text" id="localNameInput" placeholder="blank for default filename">
+        </div>
+        <div class="row segmented">
+          <label class="segmented-option"><input type="radio" name="localType" value="video" checked><span>Video</span></label>
+          <label class="segmented-option"><input type="radio" name="localType" value="audio"><span>Audio only</span></label>
+        </div>
+        <div class="row segmented" id="localAspectRow">
+          <label class="segmented-option"><input type="radio" name="localAspect" value="crop" checked><span>Crop 16:9</span></label>
+          <label class="segmented-option"><input type="radio" name="localAspect" value="original"><span>Keep original aspect ratio</span></label>
+        </div>
+        <hr class="create-clip-divider">
+        <div class="row create-clip-row">
+          <button type="button" class="success" id="createClipBtn">Create Clip</button>
+        </div>
+        <div class="create-clip-caption" id="createClipCaption"></div>
+      </div>
     </div>
   </div>
 </div>
 
 <div class="controls">
   <button class="danger" id="cancelBtn">Cancel</button>
-  <button class="primary" id="confirmBtn">Confirm</button>
 </div>
 
 <div class="footer">

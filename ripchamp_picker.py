@@ -48,7 +48,8 @@ PREVIEW_PROXY_CACHE_DIR = Path(tempfile.gettempdir()) / "ripchamp_preview_proxy_
 def build_picker_config(
     filename: str, channel_names: list, preview_path: Path = None, video_url: str = "/video",
     confirm_url: str = "/confirm", queue_url: str = None, open_file_url: str = "/open-file",
-    open_folder_url: str = "/open-folder",
+    open_folder_url: str = "/open-folder", youtube_available: bool = False,
+    streamable_available: bool = False, clip_directory_name: str | None = None,
 ) -> dict:
     """Per-item config static/picker.js fetches at load (from
     "<page-path>/config.json", resolved client-side relative to wherever
@@ -60,7 +61,15 @@ def build_picker_config(
     queue list. preview_path: the actual source file, used only to check
     whether the browser preview needs a lower-quality proxy (see
     needs_preview_proxy) -- the real crop/encode always runs against the
-    original file regardless of this flag."""
+    original file regardless of this flag. youtube_available/
+    streamable_available: whether the setup page has each host fully
+    configured (YouTube needs both a client secret and an authorized
+    token; Streamable needs saved credentials) -- picker.js uses these to
+    hide the Upload option entirely (falling back to local-only) when
+    neither is set up, and to only offer hosts that are actually usable
+    when at least one is. clip_directory_name: basename of the configured
+    "Clips Directory" setting, or None if unset -- lets the Local card's
+    "Create Clip" button caption say where the file will actually land."""
     return {
         "filename": filename,
         "channels": channel_names,
@@ -68,8 +77,11 @@ def build_picker_config(
         "confirmUrl": confirm_url,
         "queueUrl": queue_url,
         "openFileUrl": open_file_url,
+        "clipDirectoryName": clip_directory_name,
         "openFolderUrl": open_folder_url,
         "usingPreviewProxy": needs_preview_proxy(preview_path) if preview_path else False,
+        "youtubeAvailable": youtube_available,
+        "streamableAvailable": streamable_available,
     }
 
 
@@ -337,7 +349,9 @@ def build_ripchamp_args(input_path: str, result: dict, clip_dir: str | None = No
     (non-upload) output lands -- audio extractions always use it; cropped
     video only uses it for the "local" (no-upload) destination, since
     uploaded clips are deleted from their default location after upload
-    anyway."""
+    anyway. For a local-destination video, result["title"] (labeled "File
+    Name" on the picker page in this case -- see picker.js's isLocalOnly)
+    doubles as the output filename, same as fileName does for audio."""
     args = [input_path]
 
     if result.get("type") == "audio":
@@ -349,9 +363,15 @@ def build_ripchamp_args(input_path: str, result: dict, clip_dir: str | None = No
         elif clip_dir:
             out_name = Path(input_path).with_suffix(".mp3").name
             args.append(str(out_dir / out_name))
-    elif result.get("destination") == "local" and clip_dir:
-        out_name = f"{Path(input_path).stem}_1080p.mp4"
-        args.append(str(Path(clip_dir) / out_name))
+    elif result.get("destination") == "local":
+        out_dir = Path(clip_dir) if clip_dir else Path(input_path).parent
+        sanitized = sanitize_filename(result.get("title") or "")
+        if sanitized:
+            out_name = Path(sanitized).with_suffix(".mp4").name
+            args.append(str(out_dir / out_name))
+        elif clip_dir:
+            out_name = f"{Path(input_path).stem}_1080p.mp4"
+            args.append(str(out_dir / out_name))
 
     if "start" in result:
         args += ["--start", str(result["start"])]

@@ -16,7 +16,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-let CONFIG = { channels: [] };
+// canUpload starts true (optimistic) so the pre-config-load synchronous
+// updateVisibility() call at script init doesn't briefly flip the default
+// selection to Local before the real config.json answer comes back.
+let CONFIG = { channels: [], youtubeAvailable: false, streamableAvailable: false, canUpload: true };
 
 const v = document.getElementById('v');
 const startSlider = document.getElementById('startSlider');
@@ -29,16 +32,24 @@ const timeEndEl = document.getElementById('timeEnd');
 const playOverlay = document.getElementById('playOverlay');
 const volumeSlider = document.getElementById('volumeSlider');
 const volumeIcon = document.getElementById('volumeIcon');
-const videoOptions = document.getElementById('videoOptions');
-const aspectRow = document.getElementById('aspectRow');
-const hostRow = document.getElementById('hostRow');
+const localCard = document.getElementById('localCard');
+const uploadCard = document.getElementById('uploadCard');
+const localNameInput = document.getElementById('localNameInput');
+const localAspectRow = document.getElementById('localAspectRow');
+const uploadNameInput = document.getElementById('uploadNameInput');
+const hostYoutubeOption = document.getElementById('hostYoutubeOption');
+const hostStreamableOption = document.getElementById('hostStreamableOption');
 const discordPostRow = document.getElementById('discordPostRow');
 const channelRow = document.getElementById('channelRow');
 const channelSelect = document.getElementById('channelSelect');
-const titleInput = document.getElementById('titleInput');
-const titleLabel = document.getElementById('titleLabel');
+const createClipBtn = document.getElementById('createClipBtn');
+const createClipCaption = document.getElementById('createClipCaption');
+const uploadClipBtn = document.getElementById('uploadClipBtn');
+const uploadClipCaption = document.getElementById('uploadClipCaption');
 const openFileBtn = document.getElementById('openFileBtn');
 const openFolderBtn = document.getElementById('openFolderBtn');
+
+let selectedSide = 'upload';
 
 let duration = 0;
 
@@ -70,28 +81,76 @@ function updatePlayhead() {
   playhead.style.left = pct + '%';
 }
 
-function updateVisibility() {
-  const type = document.querySelector('input[name=type]:checked').value;
-  videoOptions.style.display = (type === 'video') ? 'block' : 'none';
-  aspectRow.style.display = (type === 'video') ? 'flex' : 'none';
-  if (type === 'audio') {
-    titleLabel.textContent = 'File Name';
-    titleInput.placeholder = 'blank for original filename';
-  } else {
-    titleLabel.textContent = 'Title';
-    titleInput.placeholder = 'blank for default';
+// Mirrors ripchamp_picker.py's build_ripchamp_args default-naming logic
+// (sanitized typed name if given, else "<stem>_1080p" for video / "<stem>"
+// for audio) so the caption always matches what will actually be written.
+function computeLocalOutputName() {
+  const localType = document.querySelector('input[name=localType]:checked').value;
+  const ext = localType === 'audio' ? '.mp3' : '.mp4';
+  const typed = localNameInput.value.trim();
+  const stem = (CONFIG.filename || '').replace(/\.[^/.]+$/, '');
+  const base = typed || (localType === 'audio' ? stem : `${stem}_1080p`);
+  return base + ext;
+}
+
+function updateCreateClipCaption() {
+  const location = CONFIG.clipDirectoryName || 'the same folder as the original file';
+  createClipCaption.replaceChildren(
+    document.createTextNode('Create '),
+    Object.assign(document.createElement('strong'), { textContent: computeLocalOutputName() }),
+    document.createTextNode(' in '),
+    Object.assign(document.createElement('strong'), { textContent: location }),
+  );
+}
+
+const HOST_NAMES = { youtube: 'YouTube', streamable: 'Streamable' };
+
+function updateUploadClipCaption(postToDiscord) {
+  const host = document.querySelector('input[name=videoHost]:checked').value;
+  const parts = [
+    document.createTextNode('Upload video to '),
+    Object.assign(document.createElement('strong'), { textContent: HOST_NAMES[host] || host }),
+  ];
+  if (postToDiscord) {
+    parts.push(
+      document.createTextNode(' and upload video to '),
+      Object.assign(document.createElement('strong'), { textContent: 'Discord' }),
+    );
   }
-  const dest = document.querySelector('input[name=dest]:checked').value;
-  hostRow.style.display = (type === 'video' && dest === 'upload') ? 'flex' : 'none';
-  const showDiscordPost = type === 'video' && dest === 'upload' && CONFIG.channels.length > 0;
+  uploadClipCaption.replaceChildren(...parts);
+}
+
+function updateVisibility() {
+  // No upload host configured at all -- don't offer a choice, local is
+  // the only option and stays selected/undimmed.
+  uploadCard.style.display = CONFIG.canUpload ? 'block' : 'none';
+  if (!CONFIG.canUpload) { selectedSide = 'local'; }
+
+  localCard.classList.toggle('selected', selectedSide === 'local');
+  uploadCard.classList.toggle('selected', selectedSide === 'upload');
+
+  const localType = document.querySelector('input[name=localType]:checked').value;
+  localAspectRow.style.display = (localType === 'video') ? 'flex' : 'none';
+  updateCreateClipCaption();
+
+  const showDiscordPost = CONFIG.channels.length > 0;
   discordPostRow.style.display = showDiscordPost ? 'flex' : 'none';
   const postToDiscord = document.querySelector('input[name=postToDiscord]:checked').value === 'yes';
   channelRow.style.display = (showDiscordPost && postToDiscord) ? 'flex' : 'none';
+  updateUploadClipCaption(showDiscordPost && postToDiscord);
 }
 
-document.querySelectorAll('input[name=type]').forEach(r => r.addEventListener('change', updateVisibility));
-document.querySelectorAll('input[name=dest]').forEach(r => r.addEventListener('change', updateVisibility));
+function selectSide(side) {
+  selectedSide = side;
+  updateVisibility();
+}
+
+localCard.addEventListener('click', () => selectSide('local'));
+uploadCard.addEventListener('click', () => selectSide('upload'));
+document.querySelectorAll('input[name=localType]').forEach(r => r.addEventListener('change', updateVisibility));
 document.querySelectorAll('input[name=postToDiscord]').forEach(r => r.addEventListener('change', updateVisibility));
+document.querySelectorAll('input[name=videoHost]').forEach(r => r.addEventListener('change', updateVisibility));
+localNameInput.addEventListener('input', updateCreateClipCaption);
 updateVisibility();
 
 v.addEventListener('loadedmetadata', () => {
@@ -150,28 +209,44 @@ v.addEventListener('timeupdate', () => {
   updatePlayhead();
 });
 
-document.getElementById('confirmBtn').addEventListener('click', async () => {
-  const type = document.querySelector('input[name=type]:checked').value;
-  const body = { start: startTime(), end: endTime(), duration: duration, canceled: false, type: type };
-  if (type === 'audio') {
-    body.fileName = titleInput.value.trim();
-  } else if (type === 'video') {
-    body.title = titleInput.value.trim();
-    body.aspect = document.querySelector('input[name=aspect]:checked').value;
-    body.destination = document.querySelector('input[name=dest]:checked').value;
-    if (body.destination === 'upload') {
-      body.videoHost = document.querySelector('input[name=videoHost]:checked').value;
-      if (CONFIG.channels.length > 0) {
-        body.postToDiscord = document.querySelector('input[name=postToDiscord]:checked').value === 'yes';
-        if (body.postToDiscord) {
-          body.discordChannel = channelSelect.value;
-        }
+async function submitOutput() {
+  const body = { start: startTime(), end: endTime(), duration: duration, canceled: false };
+  if (selectedSide === 'local') {
+    const localType = document.querySelector('input[name=localType]:checked').value;
+    body.type = localType;
+    if (localType === 'audio') {
+      body.fileName = localNameInput.value.trim();
+    } else {
+      body.title = localNameInput.value.trim();
+      body.aspect = document.querySelector('input[name=localAspect]:checked').value;
+      body.destination = 'local';
+    }
+  } else {
+    body.type = 'video';
+    body.title = uploadNameInput.value.trim();
+    body.aspect = document.querySelector('input[name=uploadAspect]:checked').value;
+    body.destination = 'upload';
+    body.videoHost = document.querySelector('input[name=videoHost]:checked').value;
+    if (CONFIG.channels.length > 0) {
+      body.postToDiscord = document.querySelector('input[name=postToDiscord]:checked').value === 'yes';
+      if (body.postToDiscord) {
+        body.discordChannel = channelSelect.value;
       }
     }
   }
   await fetch(CONFIG.confirmUrl, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
   if (CONFIG.queueUrl) { window.location.href = CONFIG.queueUrl; }
   else { document.body.innerHTML = '<h1>Confirmed -- you can close this tab.</h1>'; }
+}
+
+createClipBtn.addEventListener('click', () => {
+  selectSide('local');
+  submitOutput();
+});
+
+uploadClipBtn.addEventListener('click', () => {
+  selectSide('upload');
+  submitOutput();
 });
 
 document.getElementById('cancelBtn').addEventListener('click', async () => {
@@ -202,5 +277,23 @@ document.getElementById('cancelBtn').addEventListener('click', async () => {
     opt.value = name; opt.textContent = name;
     channelSelect.appendChild(opt);
   });
+
+  // No upload host configured on the setup page -- don't offer the Upload
+  // card at all, local-only is assumed (updateVisibility hides the card
+  // and forces selectedSide back to 'local').
+  CONFIG.canUpload = !!(CONFIG.youtubeAvailable || CONFIG.streamableAvailable);
+  // Only offer hosts that are actually usable -- hide the other radio,
+  // and if the default-checked one (YouTube) isn't available but
+  // Streamable is, select that instead.
+  if (!CONFIG.youtubeAvailable) {
+    hostYoutubeOption.style.display = 'none';
+  }
+  if (!CONFIG.streamableAvailable) {
+    hostStreamableOption.style.display = 'none';
+  }
+  if (!CONFIG.youtubeAvailable && CONFIG.streamableAvailable) {
+    document.querySelector('input[name=videoHost][value=streamable]').checked = true;
+  }
+
   updateVisibility();
 })();

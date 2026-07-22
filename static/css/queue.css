@@ -68,12 +68,19 @@ h2 {
   font-size: 10px; font-weight: 700; text-transform: none; vertical-align: middle;
 }
 .hint-wrapper { position: relative; display: inline-flex; align-items: center; height: 12px; margin-left: 10px; vertical-align: bottom; }
+.hint-wrapper.hint-active { background: var(--bg); padding: 12px 16px; }
 .hint-letters {
   display: inline-block; font-size: 14px; font-weight: 400; text-transform: none;
   letter-spacing: normal; color: var(--text-dim); white-space: nowrap; padding-left: 0px;
   position: relative; top: -4px;
 }
 .hint-letters .letter { display: inline-block; opacity: 0; }
+.startup-hint-letters, .watch-hint-letters, .clip-folder-hint-letters {
+  font-size: 12px; font-weight: 600; font-family: "JetBrains Mono", monospace;
+}
+.startup-hint-letters { top: 1px; }
+.watch-hint-letters { top: 0px; }
+.clip-folder-hint-letters { top: 0px; }
 .hint-cursor { display: none; margin-left: 2px; color: var(--text-dim); position: relative; top: -2px; }
 .card {
   background: var(--bg-elev);
@@ -136,11 +143,12 @@ button.browse-btn:disabled { opacity: 0.6; cursor: default; }
 }
 .settings-link {
   display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end;
-  color: #5865F2; text-decoration: none; font-size: 13px; font-weight: 400;
+  color: var(--text); text-decoration: none; font-size: 13px; font-weight: 400;
   cursor: pointer; transition: color 0.15s ease;
 }
-.settings-link:hover { color: #4651c2; }
-.settings-link .cog-icon { font-size: 19px; }
+.settings-link:hover { color: var(--text-dim); }
+.settings-link .cog-icon { font-size: 19px; color: #5865F2; transition: color 0.15s ease; }
+.settings-link:hover .cog-icon { color: #4651c2; }
 .watcher-status { font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .watcher-status .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .watcher-status .dot.on { background: #4ade80; }

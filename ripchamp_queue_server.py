@@ -58,9 +58,9 @@ Endpoints:
     GET  /static/queue.js         queue page script
     GET  /static/picker.css       picker page stylesheet
     GET  /static/picker.js        picker page script
-    GET  /static/youtube-icon.gif   tiny YouTube icon
-    GET  /static/streamable-icon.gif tiny Streamable icon
-    GET  /static/discord-icon.gif   tiny Discord icon
+    GET  /static/youtube-glyph.png   tiny YouTube icon
+    GET  /static/streamable-glyph.svg tiny Streamable icon
+    GET  /static/discord-glyph.svg   tiny Discord icon
     GET  /favicon.ico             browser tab icon
     GET  /logo.png                logo shown next to the page title
     GET  /status.json             pending/active/history as JSON (polled by the page)
@@ -795,16 +795,16 @@ class QueueHandler(BaseHTTPRequestHandler):
             _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "js" / "picker.js")
             return
 
-        if parsed.path == "/static/youtube-icon.gif":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "youtube-icon.gif")
+        if parsed.path == "/static/youtube-glyph.png":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "youtube-glyph.png")
             return
 
-        if parsed.path == "/static/streamable-icon.gif":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "streamable-icon.gif")
+        if parsed.path == "/static/streamable-glyph.svg":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "streamable-glyph.svg")
             return
 
-        if parsed.path == "/static/discord-icon.gif":
-            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "discord-icon.gif")
+        if parsed.path == "/static/discord-glyph.svg":
+            _reload_if_changed(ripchamp_picker).serve_static_file(self, STATIC_DIR / "img" / "discord-glyph.svg")
             return
 
         if parsed.path == "/favicon.ico":
@@ -1057,11 +1057,18 @@ class QueueHandler(BaseHTTPRequestHandler):
                 self._not_found()
                 return
             channel_names = list(load_discord_webhooks().keys()) if load_discord_webhooks else []
+            youtube_status = ripchamp_secrets.get_youtube_status()
+            youtube_available = bool(youtube_status.get("client_secret_added") and youtube_status.get("token_added"))
+            streamable_available = ripchamp_secrets.get_streamable_credentials() is not None
+            clip_dir = get_clip_directory()
+            clip_dir_name = Path(clip_dir).name if clip_dir else None
             config = _reload_if_changed(ripchamp_picker).build_picker_config(
                 item["path"].name, channel_names, preview_path=item["path"],
                 video_url=f"/item/{item_id}/video", confirm_url=f"/item/{item_id}/confirm",
                 queue_url="/", open_file_url=f"/item/{item_id}/open-file",
                 open_folder_url=f"/item/{item_id}/open-folder",
+                youtube_available=youtube_available, streamable_available=streamable_available,
+                clip_directory_name=clip_dir_name,
             )
             self._send_json(config)
             return

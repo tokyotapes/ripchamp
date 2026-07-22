@@ -92,32 +92,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <div class="card">
   <h2>Server Setup</h2>
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-    The RIPChamp server is the glue that makes RIPChamp work. It's very small,
-    efficient, and uses minimal resources.
-  </p>
   <div class="row">
     <label for="startupYes" style="min-width:0; font-weight: 400;">Let RIPChamp Start Automatically? <span style="color: var(--text-dim); font-size: 14px; line-height: 1.6;">(We HIGHLY recommend letting the server start automatically)</span></label>
   </div>
   <div class="row">
     <label><input type="radio" id="startupYes" name="runAtStartup" value="yes" checked> Yes</label>
     <label><input type="radio" name="runAtStartup" value="no"> No</label>
-    <span class="hint-wrapper" id="startupNoHint" style="position: relative; top: 1px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
+    <span class="hint-wrapper" id="startupNoHint" style="position: relative; top: -1px; left: -3px;"><span class="hint-letters startup-hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
   </div>
 
   <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
 
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-    RIPChamp can watch a folder (and its subfolders) for new clips
-    automatically. Just tell us where.
-  </p>
   <div class="row">
-    <label for="watchYes" style="min-width:0">Let us watch for new videos to clip?</label>
+    <label for="watchYes" style="min-width:0">Let us watch for new videos to clip? <span style="color: var(--text-dim); font-size: 14px; line-height: 1.6;">(Includes selected folder and all sub-folders)</span></label>
   </div>
   <div class="row">
     <label><input type="radio" id="watchYes" name="watchEnabled" value="yes"> Yes</label>
     <label><input type="radio" name="watchEnabled" value="no" checked> No</label>
-    <span class="hint-wrapper" id="watchNoHint" style="position: relative; top: 1px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
+    <span class="hint-wrapper" id="watchNoHint" style="position: relative; top: 1px; left: -3px;"><span class="hint-letters watch-hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
   </div>
   <div class="row" id="watchFolderRow">
     <button class="button" id="browseWatchFolderBtn" type="button">Browse for Folder...</button>
@@ -126,16 +118,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
   <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
 
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-    RIPChamp can save local clips to a folder of your choice.
-  </p>
   <div class="row">
-    <label for="clipFolderYes" style="min-width:0">Choose a folder for local clips?</label>
+    <label for="clipFolderYes" style="min-width:0">Let us know where to put your clips?</label>
   </div>
   <div class="row">
     <label><input type="radio" id="clipFolderYes" name="clipFolderEnabled" value="yes"> Yes</label>
     <label><input type="radio" name="clipFolderEnabled" value="no" checked> No</label>
-    <span class="hint-wrapper" id="clipFolderNoHint" style="position: relative; top: 3px; left: -3px;"><span class="hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
+    <span class="hint-wrapper" id="clipFolderNoHint" style="position: relative; top: 3px; left: -3px;"><span class="hint-letters clip-folder-hint-letters"></span><span class="hint-cursor cursor-blink">_</span></span>
   </div>
   <div class="row" id="clipFolderRow">
     <button class="button" id="browseClipFolderBtn" type="button">Browse for Folder...</button>
@@ -147,19 +136,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <h2>RIPChamp Integrations</h2>
   <div class="row" style="gap: 12px; align-items: stretch;">
     <button type="button" class="integration-tile" id="discordIntegrationTile" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text); font-family: inherit;">
-      <img src="/static/discord-icon.gif" alt="" width="32" height="32">
+      <img src="/static/discord-glyph.svg" alt="" width="32" height="32" style="object-fit: contain;">
       <span style="font-weight: 600;">Discord</span>
       <span style="font-size: 12px; color: var(--text-dim);">Click to setup</span>
       <span id="discordIntegrationStatus" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;"></span>
     </button>
     <button type="button" class="integration-tile" id="youtubeIntegrationTile" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text); font-family: inherit;">
-      <img src="/static/youtube-icon.gif" alt="" width="32" height="32">
+      <img src="/static/youtube-glyph.png" alt="" width="32" height="32" style="object-fit: contain;">
       <span style="font-weight: 600;">YouTube</span>
       <span style="font-size: 12px; color: var(--text-dim);">Click to setup</span>
       <span id="youtubeIntegrationStatus" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;"></span>
     </button>
     <button type="button" class="integration-tile" id="streamableIntegrationTile" style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--text); font-family: inherit;">
-      <img src="/static/streamable-icon.gif" alt="" width="32" height="32">
+      <img src="/static/streamable-glyph.svg" alt="" width="32" height="32" style="object-fit: contain;">
       <span style="font-weight: 600;">Streamable</span>
       <span style="font-size: 12px; color: var(--text-dim);">Click to setup</span>
       <span id="streamableIntegrationStatus" style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;"></span>
@@ -168,7 +157,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </div>
 
 <div class="card" id="discordIntegrationCard" style="display: none;">
-  <h2><img src="/static/discord-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> Discord Integration</h2>
+  <h2><img src="/static/discord-glyph.svg" alt="" width="20" height="20" style="vertical-align: middle; object-fit: contain;"> Discord Integration</h2>
   <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 8px;">
     RIPChamp posts finished clips to a Discord channel using a webhook. To create one:
   </p>
@@ -189,7 +178,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </div>
 
 <div class="card" id="youtubeSetupCard" style="display: none;">
-  <h2><img src="/static/youtube-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> YouTube Setup</h2>
+  <h2><img src="/static/youtube-glyph.png" alt="" width="20" height="20" style="vertical-align: middle; object-fit: contain;"> YouTube Setup</h2>
   <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 8px;">
     RIPChamp can upload finished clips straight to YouTube as Unlisted videos. To set that up:
   </p>
@@ -222,7 +211,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </div>
 
 <div class="card" id="streamableSetupCard" style="display: none;">
-  <h2><img src="/static/streamable-icon.gif" alt="" width="20" height="20" style="vertical-align: middle;"> Streamable Setup</h2>
+  <h2><img src="/static/streamable-glyph.svg" alt="" width="20" height="20" style="vertical-align: middle; object-fit: contain;"> Streamable Setup</h2>
   <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 8px;">
     Streamable requires an account to upload to -- anonymous uploads are heavily rate-limited and
     get auto-deleted after a short time. Enter your Streamable username and password below; they're
@@ -391,6 +380,7 @@ function revealHint(lettersEl, cursorEl, text, highlights) {
   const token = Symbol();
   hintTokens.set(lettersEl, token);
   lettersEl.innerHTML = buildHintHTML(text, highlights);
+  lettersEl.closest('.hint-wrapper').classList.add('hint-active');
   if (typeof anime === 'undefined') {
     cursorEl.style.display = 'inline-block';
     return;
@@ -409,9 +399,10 @@ function hideHint(lettersEl, cursorEl) {
   hintTokens.set(lettersEl, Symbol());
   cursorEl.style.display = 'none';
   lettersEl.innerHTML = '';
+  lettersEl.closest('.hint-wrapper').classList.remove('hint-active');
 }
 
-const startupNoHintLetters = document.querySelector('#startupNoHint .hint-letters');
+const startupNoHintLetters = document.querySelector('.startup-hint-letters');
 const startupNoHintCursor = document.querySelector('#startupNoHint .hint-cursor');
 
 function updateStartupHint() {
@@ -431,7 +422,7 @@ updateStartupHint();
 const watchFolderRow = document.getElementById('watchFolderRow');
 const watchFolderLabel = document.getElementById('watchFolderLabel');
 const browseWatchFolderBtn = document.getElementById('browseWatchFolderBtn');
-const watchNoHintLetters = document.querySelector('#watchNoHint .hint-letters');
+const watchNoHintLetters = document.querySelector('.watch-hint-letters');
 const watchNoHintCursor = document.querySelector('#watchNoHint .hint-cursor');
 
 function updateWatchFolderVisibility() {
@@ -441,7 +432,8 @@ function updateWatchFolderVisibility() {
     hideHint(watchNoHintLetters, watchNoHintCursor);
   } else {
     revealHint(watchNoHintLetters, watchNoHintCursor,
-      'Click the "browse for a file" button at the top right of the queue page to pick videos manually.');
+      'Click the Add Videos button in Pending to manually add your raw video to the queue.',
+      [{ text: 'Add Videos', color: '#5865F2' }]);
   }
 }
 document.querySelectorAll('input[name=watchEnabled]').forEach(
@@ -460,7 +452,7 @@ function setRadioValue(name, value) {
 const clipFolderRow = document.getElementById('clipFolderRow');
 const clipFolderLabel = document.getElementById('clipFolderLabel');
 const browseClipFolderBtn = document.getElementById('browseClipFolderBtn');
-const clipFolderNoHintLetters = document.querySelector('#clipFolderNoHint .hint-letters');
+const clipFolderNoHintLetters = document.querySelector('.clip-folder-hint-letters');
 const clipFolderNoHintCursor = document.querySelector('#clipFolderNoHint .hint-cursor');
 
 function updateClipFolderVisibility() {

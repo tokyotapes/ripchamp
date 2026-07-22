@@ -74,7 +74,7 @@ async function refresh() {
   const hintLettersHtml = watcherHint.replace(/\S/g, c => `<span class="letter">${c}</span>`);
   document.getElementById('pendingList').innerHTML =
     data.pending.map(p => `<li data-key="${p.id}" class="${isNew(p.id, seenKeys.pending) ? 'enter' : ''}"><span class="name">${esc(p.name)}</span><span class="item-actions"><a class="button process-btn" href="/item/${p.id}">Process</a><button class="remove-btn" data-id="${p.id}" title="Remove from queue">&times;</button></span></li>`).join('')
-    + `<li class="browse-item"><button class="button browse-btn" id="browseBtn">Add Files...</button><span class="browse-hint-group"><span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters">${hintLettersHtml}</span><span class="hint-cursor cursor-blink">_</span></span></span></li>`;
+    + `<li class="browse-item"><button class="button browse-btn" id="browseBtn">Add Videos...</button><span class="browse-hint-group"><span class="hint-icon">?</span><span class="hint-wrapper"><span class="hint-letters">${hintLettersHtml}</span><span class="hint-cursor cursor-blink">_</span></span></span></li>`;
   document.getElementById('clearAllBtn').disabled = data.pending.length === 0;
 
   // Only touch the DOM (and restart the dots animation) when the active
