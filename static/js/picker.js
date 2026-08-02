@@ -107,10 +107,17 @@ const HOST_NAMES = { youtube: 'YouTube', streamable: 'Streamable' };
 
 function updateUploadClipCaption(postToDiscord) {
   const host = document.querySelector('input[name=videoHost]:checked').value;
+  const title = uploadNameInput.value.trim();
   const parts = [
     document.createTextNode('Upload video to '),
     Object.assign(document.createElement('strong'), { textContent: HOST_NAMES[host] || host }),
   ];
+  if (title) {
+    parts.push(
+      document.createTextNode(' as '),
+      Object.assign(document.createElement('strong'), { textContent: title }),
+    );
+  }
   if (postToDiscord) {
     parts.push(
       document.createTextNode(' and upload video to '),
@@ -151,6 +158,7 @@ document.querySelectorAll('input[name=localType]').forEach(r => r.addEventListen
 document.querySelectorAll('input[name=postToDiscord]').forEach(r => r.addEventListener('change', updateVisibility));
 document.querySelectorAll('input[name=videoHost]').forEach(r => r.addEventListener('change', updateVisibility));
 localNameInput.addEventListener('input', updateCreateClipCaption);
+uploadNameInput.addEventListener('input', updateVisibility);
 updateVisibility();
 
 v.addEventListener('loadedmetadata', () => {

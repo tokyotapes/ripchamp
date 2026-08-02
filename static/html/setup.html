@@ -47,46 +47,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </head>
 <body>
 <div class="page">
-<div class="brand">
+<div class="brand card">
   <div class="brand-left">
     <div class="title-row">
       <img src="/logo2.png" alt="RIPChamp logo" class="logo">
       <h1 class="brand-name"><span class="rip-part">RIP</span><span class="champ-part">Champ</span>(<span class="clip-part">Setup</span>) == <span class="queue-part">true</span><span class="cursor-blink">_</span></h1>
     </div>
     <div class="sub">Configure the watcher, local clips, and integrations from one place.</div>
-  </div>
-</div>
-
-<div class="card" id="introCard">
-  <p style="color: var(--text); font-size: 18px; font-weight: 600; margin: 0 0 16px;">
-    ClipChamp is fucking terrible.
-  </p>
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
-    It embodies everything that is wrong with the modern Microsoft Corporation.
-  </p>
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
-    It's bloated with tons of features no one asked for.<br>
-    It chains you to a Microsoft account and nags you to upload everything to OneDrive.
-  </p>
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
-    Of course none of that matters if you can't reliably use it or keep it from crashing!
-  </p>
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px;">
-    I hate ClipChamp so that's why I made RIPChamp.
-  </p>
-  <p style="color: var(--text-dim); font-size: 14px; line-height: 1.6; margin: 0;">
-    RIPChamp is a back-to-basics clipping engine without the bullshit. A watcher
-    agent monitors folders you choose for new video files. In a simple web
-    interface you can see the queue of all the new videos ready to be clipped
-    and proceed whenever you are ready. Inside the Trim page you will find a
-    video preview and an intuitive interface for selecting the start and stop
-    time of the new clip. Want to make it a local file? No problem. Want to
-    upload to YouTube or Streamable? Sure thing. Post a link to the clip in
-    Discord, we can handle that. Because that's what I wanted and I think some
-    of you will want that too.
-  </p>
-  <div style="text-align: center;">
-    <button class="button" id="whoAskedBtn" style="margin-top: 16px;">who asked?</button>
   </div>
 </div>
 
@@ -203,6 +170,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div class="row">
     <span id="youtubeTokenStatus" style="font-size: 13px; color: var(--text-dim);"></span>
   </div>
+
+  <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+
+  <p style="color: var(--text-dim); font-size: 13px; line-height: 1.7; margin: 0 0 16px;">
+    After you click the "Authorize" button you will be asked if your newly created project is
+    allowed to interact with your account on your behalf. This is usually accompanied with large
+    warnings, as this new project you created has not been reviewed by Google for safety. Since you
+    are the only author of the project, and the only user, you are really just giving permission to
+    yourself. That's to say, don't be scared away by the ominous warnings.
+  </p>
+
   <div class="row">
     <button class="button" id="authorizeYoutubeBtn" type="button">Authorize with Google</button>
     <button class="danger" id="resetYoutubeTokenBtn" type="button">Reset Token</button>
@@ -250,33 +228,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
 <script>
-const INTRO_DISMISSED_KEY = 'ripchampIntroDismissed';
-
-if (localStorage.getItem(INTRO_DISMISSED_KEY) === '1') {
-  document.getElementById('introCard').style.display = 'none';
-}
-
-document.getElementById('whoAskedBtn').addEventListener('click', () => {
-  localStorage.setItem(INTRO_DISMISSED_KEY, '1');
-  const card = document.getElementById('introCard');
-  if (typeof anime === 'undefined') {
-    card.style.display = 'none';
-    return;
-  }
-  anime({
-    targets: card,
-    opacity: [1, 0],
-    height: [card.offsetHeight, 0],
-    marginBottom: [20, 0],
-    paddingTop: [20, 0],
-    paddingBottom: [20, 0],
-    duration: 450,
-    easing: 'easeInOutQuad',
-    begin: () => { card.style.overflow = 'hidden'; },
-    complete: () => { card.style.display = 'none'; },
-  });
-});
-
 function setIntegrationStatusBadge(el, complete) {
   el.textContent = complete ? 'Complete' : 'Not set up';
   el.style.color = complete ? '#3ba55d' : 'var(--danger)';
@@ -611,6 +562,7 @@ saveWebhookBtn.addEventListener('click', async () => {
   }
 
   saveWebhookBtn.disabled = true;
+  saveWebhookBtn.textContent = 'Verifying...';
   try {
     const res = await fetch(`/save-discord-webhook?name=${encodeURIComponent(name)}&url=${encodeURIComponent(url)}`);
     const data = await res.json();
@@ -627,6 +579,7 @@ saveWebhookBtn.addEventListener('click', async () => {
     webhookSaveError.style.display = 'block';
   } finally {
     saveWebhookBtn.disabled = false;
+    saveWebhookBtn.textContent = 'Save Webhook';
   }
 });
 
@@ -747,6 +700,7 @@ saveStreamableBtn.addEventListener('click', async () => {
   }
 
   saveStreamableBtn.disabled = true;
+  saveStreamableBtn.textContent = 'Verifying...';
   try {
     const res = await fetch(`/save-streamable-credentials?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
     const data = await res.json();
@@ -762,6 +716,7 @@ saveStreamableBtn.addEventListener('click', async () => {
     streamableSaveError.style.display = 'block';
   } finally {
     saveStreamableBtn.disabled = false;
+    saveStreamableBtn.textContent = 'Save';
   }
 });
 

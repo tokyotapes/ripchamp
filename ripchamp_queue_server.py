@@ -99,6 +99,7 @@ Endpoints:
 """
 
 import argparse
+import base64
 import importlib
 import json
 import re
@@ -106,7 +107,9 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -241,6 +244,26 @@ def is_valid_discord_webhook_url(url: str) -> bool:
         r"^https://(discord\.com|discordapp\.com)/api/webhooks/\d+/[\w-]+/?$", url))
 
 
+def verify_discord_webhook(url: str) -> tuple[bool, str]:
+    """Check a webhook URL actually points at a real, live webhook before
+    saving it -- GET on a webhook URL is Discord's own documented "Get
+    Webhook" endpoint, read-only (no message posted), returning the
+    webhook's info if it exists or 404/401 if it's been deleted or the
+    token's wrong. Needs an explicit User-Agent -- Discord's edge (Cloudflare)
+    returns a bare 403 for urllib's default "Python-urllib/x.y" UA, before
+    the request ever reaches Discord's own API logic. Returns (ok, error_detail)."""
+    req = urllib.request.Request(url, headers={"User-Agent": "RIPChamp (https://github.com/tokyotapes/ripchamp)"})
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            return True, ""
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 404):
+            return False, "Discord doesn't recognize that webhook -- check the URL, or it may have been deleted."
+        return False, f"Discord returned HTTP {e.code}."
+    except urllib.error.URLError as e:
+        return False, f"Couldn't reach Discord to verify: {e.reason}"
+
+
 def is_valid_youtube_client_secret(text: str) -> bool:
     """Loose shape-check on a Google OAuth client secret JSON -- just
     enough to catch "wrong file" mistakes, not a full schema validation."""
@@ -250,6 +273,34 @@ def is_valid_youtube_client_secret(text: str) -> bool:
         return False
     inner = parsed.get("installed") or parsed.get("web")
     return bool(inner and "client_id" in inner and "client_secret" in inner)
+
+
+def verify_streamable_credentials(username: str, password: str) -> tuple[bool, str]:
+    """Check a Streamable login actually works before saving it. Streamable
+    doesn't document a dedicated account-check endpoint (their public docs
+    only cover oEmbed/video-metadata lookups), so this reuses the same
+    POST /upload endpoint ripchamp.py's own upload_to_streamable() calls
+    for real uploads -- just with no file attached. Confirmed live (with
+    deliberately wrong credentials) that Streamable checks Basic Auth
+    before validating the request body: bad credentials get a 401 here,
+    before Streamable ever gets far enough to complain about the missing
+    file, so this needs no test upload. Returns (ok, error_detail)."""
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    req = urllib.request.Request(
+        "https://api.streamable.com/upload", method="POST",
+        headers={"Authorization": f"Basic {token}"})
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        return True, ""
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return False, "Incorrect username or password."
+        # Any other status means Basic Auth was accepted and Streamable
+        # got far enough to complain about something else (e.g. the
+        # missing file) -- credentials are good.
+        return True, ""
+    except urllib.error.URLError as e:
+        return False, f"Couldn't reach Streamable to verify: {e.reason}"
 
 
 def run_elevated_tools_mode(mode: str, timeout: float = 90) -> tuple:
@@ -664,7 +715,12 @@ def expected_output_paths(path: Path, result: dict) -> list:
     # A custom clip directory only applies to the "local" (no-upload) branch --
     # uploaded clips still land next to the source until deleted post-upload.
     base_dir = Path(clip_dir) if (clip_dir and result.get("destination") == "local") else path.parent
-    cropped = base_dir / f"{path.stem}_1080p.mp4"
+    # Mirror build_ripchamp_args' naming exactly -- for a "local" destination,
+    # a custom title (labeled "File Name" on the picker page) doubles as the
+    # output filename, same as fileName does for audio above.
+    sanitized = ripchamp_picker.sanitize_filename(result.get("title") or "") if result.get("destination") == "local" else ""
+    out_name = Path(sanitized).with_suffix(".mp4").name if sanitized else f"{path.stem}_1080p.mp4"
+    cropped = base_dir / out_name
     discord_copy = cropped.with_name(f"{cropped.stem}_discord.mp4")
     return [cropped, discord_copy]
 
@@ -923,6 +979,10 @@ class QueueHandler(BaseHTTPRequestHandler):
             if not is_valid_discord_webhook_url(url):
                 self._send_json({"ok": False, "error": "That doesn't look like a Discord webhook URL."})
                 return
+            valid, error = verify_discord_webhook(url)
+            if not valid:
+                self._send_json({"ok": False, "error": error})
+                return
             ripchamp_secrets.set_discord_webhook(name, url)
             self._send_json({"ok": True})
             return
@@ -984,6 +1044,10 @@ class QueueHandler(BaseHTTPRequestHandler):
             password = qs.get("password", [None])[0] or ""
             if not username or not password:
                 self._send_json({"ok": False, "error": "Username and password are both required."})
+                return
+            valid, error = verify_streamable_credentials(username, password)
+            if not valid:
+                self._send_json({"ok": False, "error": error})
                 return
             ripchamp_secrets.set_streamable_credentials(username, password)
             self._send_json({"ok": True})

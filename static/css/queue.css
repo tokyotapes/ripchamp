@@ -33,7 +33,7 @@ body {
   font-family: "Poppins", sans-serif;
   padding: 40px 24px;
 }
-.page { width: 100%; max-width: 1300px; }
+.page { width: 100%; max-width: 1200px; position: relative; }
 .brand { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 4px; }
 .brand-left { display: flex; flex-direction: column; gap: 4px; }
 .title-row { display: flex; align-items: center; gap: 14px; }
@@ -87,8 +87,12 @@ h2 {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 30px;
   box-shadow: 5px 5px 0px -3px #8E54EE;
+  transition: box-shadow 0.2s ease;
+}
+.card:hover {
+  box-shadow: 5px 5px 0px -3px #5865F2;
 }
 ul {
   list-style: none; padding: 0; margin: 0;
@@ -133,9 +137,14 @@ a.button, button.button {
 a.button:hover, button.button:hover { background: #4970cc; }
 a.process-btn { background: #5865F2; }
 a.process-btn:hover { background: #4651c2; }
-button.browse-btn { background: #5865F2; white-space: nowrap; font-size: 11px; padding: 9px 12px; }
-button.browse-btn:hover { background: #4651c2; }
-button.browse-btn:disabled { opacity: 0.6; cursor: default; }
+button.browse-btn {
+  background: transparent; border: 1px solid #3ba55d; color: #3ba55d;
+  padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 400; font-family: inherit;
+  cursor: pointer; transition: background 0.15s ease; white-space: nowrap;
+}
+button.browse-btn:hover { background: rgba(59, 165, 93, 0.12); }
+button.browse-btn:disabled { opacity: 0.5; cursor: default; }
+.browse-btn-icon { font-family: "NerdFontsSymbols Nerd Font"; margin-left: 8px; font-size: 15px; }
 .browse-col { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 0; }
 .browse-buttons {
   display: flex; flex-direction: column; gap: 8px; align-self: stretch;
@@ -167,6 +176,7 @@ button.danger {
 }
 button.danger:hover { background: rgba(229, 72, 77, 0.12); }
 button.danger:disabled { opacity: 0.5; cursor: default; }
+#clearAllBtn, #clearHistoryBtn { padding: 5px 14px; }
 .name { overflow-wrap: anywhere; color: var(--text-mid); }
 .name-wrap { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; min-width: 0; }
 .name-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; color: inherit; }
