@@ -285,6 +285,17 @@ function Install-WatcherTask {
     schtasks /create /tn $TaskName /tr $trValue /sc onlogon /rl limited /f
 
     if ($LASTEXITCODE -eq 0) {
+        # schtasks /create defaults to a 72-hour execution time limit, after
+        # which Task Scheduler force-kills the task regardless of activity --
+        # bit us as the watcher silently dying during long AFK stretches.
+        # The watcher is meant to run indefinitely, so clear that limit.
+        try {
+            $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+            $task.Settings.ExecutionTimeLimit = "PT0S"
+            Set-ScheduledTask -InputObject $task | Out-Null
+        } catch {
+            Write-Host "Note: couldn't clear the task's 72-hour execution time limit ($_) -- the watcher may still get killed after 3 days." -ForegroundColor Yellow
+        }
         Write-Host "Done. The watcher will start automatically and hidden next time you log in."
         Write-Host "To start it right now: schtasks /run /tn `"$TaskName`""
     } else {
